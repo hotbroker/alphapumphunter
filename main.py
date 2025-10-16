@@ -299,7 +299,11 @@ async def cmd_scan_async():
             print(" ".join(str(r.get(h, "")).ljust(widths[h]) for h in headers_row))
         print(f"\nTotal alpha futures-only: {len(rows)})")
 
-
+def get_bypass_token():
+    if not os.path.exists('bypass_token.txt'):
+        return []
+    with open('bypass_token.txt','r') as f:
+        return f.readlines()
 async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, refresh_minutes: int, log_level: str, cooldown_minutes: int):
     setup_logger(log_level or os.getenv("APH_LOG_LEVEL", "INFO"))
     async with httpx.AsyncClient(timeout=15) as client:
@@ -322,6 +326,8 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
         next_refresh = time.time() + refresh_minutes * 60
         while True:
+            bypass = get_bypass_token()
+            bypass = [x.strip().upper() for x in bypass if x.strip()]
             tick_start = time.time()
             try:
                 # optional refresh of universe
@@ -357,6 +363,8 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                     if not res:
                         continue
                     change, base_px, last_px = res
+                    if change>=threshold_pct/2:
+                        logger.info(f"Token {id_to_symbol.get(token_id, token_id)} change {change:.2f}% over {window_min} minutes (from {base_px:.8g} to {last_px:.8g})")
                     if change >= threshold_pct:
                         if cooldown_secs > 0:
                             prev = last_alert_ts.get(token_id, 0)
@@ -364,6 +372,11 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 continue
                             last_alert_ts[token_id] = now
                         sym = id_to_symbol.get(token_id, token_id)
+                        if sym in bypass:
+                            logger.info(f"Token {sym} in bypass list, skip alert")
+                            continue
+
+                        
 
                         '''上报的时候带上这些字段
 

@@ -1,0 +1,10 @@
+[project]
+name = "alphapumphunter"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.25",
+    "loguru>=0.7",
+]

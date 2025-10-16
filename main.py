@@ -392,7 +392,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         msg = f'符号:{sym}\n'
                         msg += f'当前价:{last_px:.8g}\n'
                         msg += f'涨幅:{change:.2f}%\n'
-                        msg += f'窗口:{window_min}分钟\n'
+                        #msg += f'窗口:{window_min}分钟\n'
                         msg += f'24小时涨幅:{str(it.get("percentChange24h", "-"))}%\n'
                         msg += f'24小时成交量:{utils.format_big_number(it.get("volume24h", "-"))}\n'
                         msg += f'流动性:{utils.format_big_number(it.get("liquidity", "-"))}\n'
@@ -404,14 +404,14 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         history.append((now, last_px, change))
                         report_history[sym] = history
                         if len(history) > 1:
-                            msg +=f'\n\n第一次提示时间:{utils.time_to_string(history[0][0])}\n'
+                            msg +=f'\n\n\n第一次提示时间:{utils.time_to_string(history[0][0])}\n'
                             priceidff = last_px - history[0][1]
                             priceperc = priceidff/history[0][1]*100
                             msg +=f'距离第一次提示已经过去了{(now-history[0][0])/60:.1f}分钟\n'
                             msg +=f'距离第一次提示价格 涨幅{priceperc:.2f}%\n'
 
                         print(msg)
-                        await send_notification_async('51782135279@chatroom', msg, title="Alpha PumpHunter Alert")
+                        await send_notification_async('51782135279@chatroom', msg, title="Alpha PumpHunter Alert\n")
                 # pacing
                 elapsed = time.time() - tick_start
                 sleep_for = max(0.0, interval - elapsed)

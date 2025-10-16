@@ -304,6 +304,56 @@ def get_bypass_token():
         return []
     with open('bypass_token.txt','r') as f:
         return f.readlines()
+def load_history():
+    if not os.path.exists('history.json'):
+        return {}
+    with open('history.json','r') as f:
+        try:
+            js = json.load(f)
+            if isinstance(js, dict):
+                return js
+            return {}
+        except Exception as e:
+            logger.warning(f"Failed to load history from history.json: {e}")
+            return {}
+def save_history(history, path: str="history.json"):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2)
+        logger.info(f"Saved history to {path}, {len(history)} entries")
+    except Exception as e:
+        logger.warning(f"Failed to save history to {path}: {e}")
+
+async def report_history_ranked(history_ranked,alphalist):
+    repportmsg = '历史上(5天)报过的币种列表:\n\n'
+    cnt =0
+    pumplog={}
+    for hk,hv in history_ranked.items():
+        elapsed = time.time() - hv.get("alerttime",0)
+        if elapsed > 3600*24*5:
+            continue
+
+        if hv.get("symbol") not in alphalist:
+            logger.info(f'remove {hv.get("symbol")} from history_ranked')
+        else:
+            cnt = cnt+1
+            pricediff = float(alphalist[hv.get("symbol")].get("price")) - float(hv.get("price",0))
+            perc = pricediff/float(hv.get("price",1))*100
+            sym = hv.get("symbol","-")
+            pumplog[sym] = perc
+            #repportmsg += f'{cnt}）{hv.get("symbol","-")} {perc:.2f}%\n\n'
+    if pumplog:
+        sorted_pumplog = dict(sorted(pumplog.items(), key=lambda item: item[1], reverse=True))
+        cnt = 0
+        for sym,perc in sorted_pumplog.items():
+            if cnt>20:
+                break
+            cnt = cnt+1
+            repportmsg += f'{cnt}）{sym} {perc:.2f}%\n\n'
+        repportmsg += f'\n\n总计{len(sorted_pumplog)}个币种在过去5天内被提示过\n\n'
+        print(repportmsg)
+        await send_notification_async('51782135279@chatroom', repportmsg, title="Alpha PumpHunter Alert\n")
+
 async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, refresh_minutes: int, log_level: str, cooldown_minutes: int):
     setup_logger(log_level or os.getenv("APH_LOG_LEVEL", "INFO"))
     async with httpx.AsyncClient(timeout=15) as client:
@@ -318,6 +368,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         tracked_ids: Set[str] = {mw_token_key(it) for it in items}
         id_to_symbol: Dict[str, str] = {mw_token_key(it): mw_display_symbol(it) for it in items}
         logger.info(f"Tracked tokens (futures-only): {len(tracked_ids)}")
+        history_ranked = load_history()
 
         tracker = PriceTracker()
         window_secs = window_min * 60
@@ -326,6 +377,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         report_history={}
 
         next_refresh = time.time() + refresh_minutes * 60
+        last_report_rank =0
         while True:
             bypass = get_bypass_token()
             bypass = [x.strip().upper() for x in bypass if x.strip()]
@@ -349,7 +401,15 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
                 # Fetch current snapshot
                 snapshot = await mw.alpha_items()
+                
                 now = time.time()
+                if now - last_report_rank > 3600*8:
+                    last_report_rank = now
+                    snap_by_sym: Dict[str, dict] = {it['symbol']: it for it in snapshot}
+                    await report_history_ranked(history_ranked,snap_by_sym)
+
+
+
                 snap_by_id: Dict[str, dict] = {mw_token_key(it): it for it in snapshot}
 
                 for token_id in list(tracked_ids):
@@ -377,7 +437,11 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             logger.info(f"Token {sym} in bypass list, skip alert")
                             continue
 
-                        
+                        if history_ranked.get(sym) is None:
+                            newit = dict(it)
+                            newit['alerttime'] = now
+                            history_ranked[sym] = newit
+                            save_history(history_ranked)
 
                         '''上报的时候带上这些字段
 
@@ -395,9 +459,9 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         #msg += f'窗口:{window_min}分钟\n'
                         msg += f'24小时涨幅:{str(it.get("percentChange24h", "-"))}%\n'
                         msg += f'24小时成交量:{utils.format_big_number(it.get("volume24h", "-"))}\n'
-                        msg += f'流动性:{utils.format_big_number(it.get("liquidity", "-"))}\n'
-                        msg += f'市值:{utils.format_big_number(it.get("marketCap", "-"))}\n'
-                        msg += f'完全稀释市值:{utils.format_big_number(it.get("fdv", "-"))}\n'
+                        msg += f'流动性:{utils.format_big_number(it.get("liquidity", "-"))}\n\n'
+                        msg += f'市值:{utils.format_big_number(it.get("marketCap", "-"))}\n\n'
+                        msg += f'完全稀释市值:{utils.format_big_number(it.get("fdv", "-"))}\n\n'
                         msg += f'时间:{utils.time_to_string(now)}\n'
                         #msg += f'来源:Alpha PumpHunter'
                         history = report_history.get(sym, [])
@@ -408,7 +472,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             priceidff = last_px - history[0][1]
                             priceperc = priceidff/history[0][1]*100
                             msg +=f'距离第一次提示已经过去了{(now-history[0][0])/60:.1f}分钟\n'
-                            msg +=f'距离第一次提示价格 涨幅{priceperc:.2f}%\n'
+                            msg +=f'距离第一次提示价格 涨幅 【{priceperc:.2f}%】\n'
 
                         print(msg)
                         await send_notification_async('51782135279@chatroom', msg, title="Alpha PumpHunter Alert\n")
@@ -421,7 +485,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                 logger.info("Stopped.")
                 return
             except Exception as e:
-                logger.error(f"Monitor loop error: {e}")
+                logger.opt(exception=True).error(f"Monitor loop error: {e}")
                 await asyncio.sleep(max(5.0, interval / 2))
 
 

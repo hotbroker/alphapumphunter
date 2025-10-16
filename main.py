@@ -479,7 +479,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                 # pacing
                 elapsed = time.time() - tick_start
                 sleep_for = max(0.0, interval - elapsed)
-                logger.info(f"Tick complete in {elapsed:.2f}s, sleeping for {sleep_for:.2f}s...")
+                #logger.info(f"Tick complete in {elapsed:.2f}s, sleeping for {sleep_for:.2f}s...")
                 await asyncio.sleep(sleep_for)
             except KeyboardInterrupt:
                 logger.info("Stopped.")

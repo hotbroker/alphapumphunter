@@ -364,9 +364,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 continue
                             last_alert_ts[token_id] = now
                         sym = id_to_symbol.get(token_id, token_id)
-                        logger.warning(
-                            f"ALERT {sym} +{change:.2f}% in {window_min}m (from {base_px:.8g} to {last_px:.8g})"
-                        )
+
                         '''上报的时候带上这些字段
 
             "symbol": "RECALL",
@@ -388,7 +386,8 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         msg += f'完全稀释市值:{utils.format_big_number(it.get("fdv", "-"))}\n'
                         msg += f'时间:{utils.time_to_string(now)}\n'
                         msg += f'来源:Alpha PumpHunter'
-                        await send_notification_async('veryverybadguy', msg, title="Alpha PumpHunter Alert")
+                        print(msg)
+                        await send_notification_async('51782135279@chatroom', msg, title="Alpha PumpHunter Alert")
                 # pacing
                 elapsed = time.time() - tick_start
                 sleep_for = max(0.0, interval - elapsed)

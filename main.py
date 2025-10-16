@@ -323,6 +323,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         window_secs = window_min * 60
         cooldown_secs = cooldown_minutes * 60 if cooldown_minutes > 0 else 0
         last_alert_ts: Dict[str, float] = {}
+        report_history={}
 
         next_refresh = time.time() + refresh_minutes * 60
         while True:
@@ -398,7 +399,17 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         msg += f'市值:{utils.format_big_number(it.get("marketCap", "-"))}\n'
                         msg += f'完全稀释市值:{utils.format_big_number(it.get("fdv", "-"))}\n'
                         msg += f'时间:{utils.time_to_string(now)}\n'
-                        msg += f'来源:Alpha PumpHunter'
+                        #msg += f'来源:Alpha PumpHunter'
+                        history = report_history.get(sym, [])
+                        history.append((now, last_px, change))
+                        report_history[sym] = history
+                        if len(history) > 1:
+                            msg +=f'\n\n第一次提示时间:{utils.time_to_string(history[0][0])}\n'
+                            priceidff = last_px - history[0][1]
+                            priceperc = priceidff/history[0][1]*100
+                            msg +=f'距离第一次提示已经过去了{(now-history[0][0])/60:.1f}分钟\n'
+                            msg +=f'距离第一次提示价格 涨幅{priceperc:.2f}%\n'
+
                         print(msg)
                         await send_notification_async('51782135279@chatroom', msg, title="Alpha PumpHunter Alert")
                 # pacing

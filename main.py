@@ -350,6 +350,8 @@ async def report_history_ranked(history_ranked,alphalist):
                 break
             cnt = cnt+1
             firstitem = history_ranked.get(sym)
+            if not firstitem:
+                continue
             highest = firstitem.get('highest',{})
             if not highest:
                 repportmsg += f'{cnt}）{sym} {perc:.2f}%\n\n'

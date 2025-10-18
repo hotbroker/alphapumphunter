@@ -13,3 +13,18 @@ def time_to_string(timestamp1=None):
     import time
     timestamp1 = timestamp1 or time.time()
     return datetime.fromtimestamp(timestamp1).strftime("%Y-%m-%d, %H:%M:%S")
+
+def format_day_hour_minute(seconds):
+    days, seconds = divmod(seconds, 86400)
+    hours, seconds = divmod(seconds, 3600)
+    minutes, seconds = divmod(seconds, 60)
+    parts = []
+    if days > 0:
+        parts.append(f"{int(days)}d")
+    if hours > 0:
+        parts.append(f"{int(hours)}h")
+    if minutes > 0:
+        parts.append(f"{int(minutes)}m")
+    if seconds > 0 or not parts:
+        parts.append(f"{int(seconds)}s")
+    return ' '.join(parts)

@@ -320,7 +320,7 @@ def save_history(history, path: str="history.json"):
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(history, f, indent=2)
-        logger.info(f"Saved history to {path}, {len(history)} entries")
+        #logger.info(f"Saved history to {path}, {len(history)} entries")
     except Exception as e:
         logger.warning(f"Failed to save history to {path}: {e}")
 
@@ -349,10 +349,35 @@ async def report_history_ranked(history_ranked,alphalist):
             if cnt>20:
                 break
             cnt = cnt+1
-            repportmsg += f'{cnt}）{sym} {perc:.2f}%\n\n'
+            firstitem = history_ranked.get(sym)
+            highest = firstitem.get('highest',{})
+            if not highest:
+                repportmsg += f'{cnt}）{sym} {perc:.2f}%\n\n'
+            else:
+                highestprice = float(highest.get('price',0))
+                priceidff = highestprice - float(firstitem.get("price",0))
+                priceperc = priceidff/float(firstitem.get("price",1))*100
+                repportmsg += f'{cnt}）{sym} {perc:.2f}%(最高涨幅 {priceperc:.2f}%)\n\n'
         repportmsg += f'\n\n总计{len(sorted_pumplog)}个币种在过去5天内被提示过\n\n'
         print(repportmsg)
         await send_notification_async('51782135279@chatroom', repportmsg, title="Alpha PumpHunter Alert\n")
+
+def save_highest_record(history_ranked,item):
+    sym = item.get("symbol","-")
+    now = time.time()
+    if history_ranked.get(sym) :
+        symitem= history_ranked.get(sym)
+        highesttiem = symitem.get('highest')
+        if highesttiem is None:
+            symitem['highest'] = item
+        else:
+            logger.info(f'new high for {sym} oldprice {highesttiem.get("price",0)} newprice {item.get("price",0)}')
+            oldprice = float(highesttiem.get('price',0))
+            newprice = float(item.get('price',0))
+            if newprice > oldprice:
+                symitem['highest'] = item
+    return history_ranked
+    
 
 async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, refresh_minutes: int, log_level: str, cooldown_minutes: int):
     setup_logger(log_level or os.getenv("APH_LOG_LEVEL", "INFO"))
@@ -407,7 +432,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                     last_report_rank = now
                     snap_by_sym: Dict[str, dict] = {it['symbol']: it for it in snapshot}
                     await report_history_ranked(history_ranked,snap_by_sym)
-
+                #await report_history_ranked(history_ranked,snap_by_sym)
 
 
                 snap_by_id: Dict[str, dict] = {mw_token_key(it): it for it in snapshot}
@@ -419,6 +444,8 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                     px = mw_price(it)
                     if px is None or px <= 0:
                         continue
+                    history_ranked = save_highest_record(history_ranked,it)
+                    save_history(history_ranked)
                     tracker.add(token_id, now, px, window_secs)
                     res = tracker.pct_change(token_id, window_secs)
                     if not res:
@@ -471,7 +498,8 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             msg +=f'\n\n\n第一次提示时间:{utils.time_to_string(history[0][0])}\n'
                             priceidff = last_px - history[0][1]
                             priceperc = priceidff/history[0][1]*100
-                            msg +=f'距离第一次提示已经过去了{(now-history[0][0])/60:.1f}分钟\n'
+                            elapsed=now-history[0][0]
+                            msg +=f'距离第一次提示已经过去了{utils.format_day_hour_minute(elapsed)}\n'
                             msg +=f'距离第一次提示价格 涨幅 【{priceperc:.2f}%】\n'
 
                         print(msg)

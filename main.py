@@ -359,7 +359,10 @@ async def report_history_ranked(history_ranked,alphalist):
                 highestprice = float(highest.get('price',0))
                 priceidff = highestprice - float(firstitem.get("price",0))
                 priceperc = priceidff/float(firstitem.get("price",1))*100
-                repportmsg += f'{cnt}）{sym} {perc:.2f}%(最高涨幅 {priceperc:.2f}%)\n\n'
+                fired=""
+                if priceperc>100:
+                    fired="🔥"
+                repportmsg += f'{cnt}）{sym} {perc:.2f}%   ({priceperc:.2f}%){fired}\n\n'
         repportmsg += f'\n\n总计{len(sorted_pumplog)}个币种在过去5天内被提示过\n\n'
         print(repportmsg)
         await send_notification_async('51782135279@chatroom', repportmsg, title="Alpha PumpHunter Alert\n")

@@ -333,6 +333,7 @@ async def report_history_ranked(history_ranked,alphalist):
         if elapsed > 3600*24*5:
             continue
         marketCap = hv.get("marketCap",0)
+        marketCap = float(marketCap)
         if marketCap and marketCap>15000000:
             continue
 
@@ -450,6 +451,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                     if not it:
                         continue
                     marketCap = it.get("marketCap",0)
+                    marketCap = float(marketCap)
                     if marketCap and marketCap>15000000:# 过滤市值大于1500万的币种
                         continue
                     px = mw_price(it)

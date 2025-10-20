@@ -332,6 +332,9 @@ async def report_history_ranked(history_ranked,alphalist):
         elapsed = time.time() - hv.get("alerttime",0)
         if elapsed > 3600*24*5:
             continue
+        marketCap = hv.get("marketCap",0)
+        if marketCap and marketCap>15000000:
+            continue
 
         if hv.get("symbol") not in alphalist:
             logger.info(f'remove {hv.get("symbol")} from history_ranked')
@@ -445,6 +448,9 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                 for token_id in list(tracked_ids):
                     it = snap_by_id.get(token_id)
                     if not it:
+                        continue
+                    marketCap = it.get("marketCap",0)
+                    if marketCap and marketCap>15000000:# 过滤市值大于1500万的币种
                         continue
                     px = mw_price(it)
                     if px is None or px <= 0:

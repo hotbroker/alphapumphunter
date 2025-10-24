@@ -26,5 +26,6 @@ def format_day_hour_minute(seconds):
     if minutes > 0:
         parts.append(f"{int(minutes)}m")
     if seconds > 0 or not parts:
-        parts.append(f"{int(seconds)}s")
+        if not days:
+            parts.append(f"{int(seconds)}s")
     return ' '.join(parts)

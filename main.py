@@ -387,7 +387,38 @@ def save_highest_record(history_ranked,item):
                 symitem['highest'] = item
     return history_ranked
     
-
+async def get_holders_info(contract_address: str,alphachainName,datalist=['top100_holder_percent','top10_holder_percent']) -> list[int]:
+    chainName={
+        'Solana':'sol',
+        'BSC':'bsc',
+        'Base':'base',
+    }
+    chainid = chainName.get(alphachainName,'')
+    if not chainid:
+        return None
+    url=f'https://gmgn.ai/vas/api/v1/token_holders/{chainid}/{contract_address}'
+    headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            js = r.json()
+            trends= js.get("data",{}).get("trends",{})
+            results = {}
+            for dt in datalist:
+                vallist=  trends.get(dt,[])
+                results[dt] = vallist[-1] if vallist else 0
+            return results
+    except Exception as e:
+        logger.warning(f"Failed to get holders count for {contract_address}: {e}")
+        return None
+    
 async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, refresh_minutes: int, log_level: str, cooldown_minutes: int):
     setup_logger(log_level or os.getenv("APH_LOG_LEVEL", "INFO"))
     async with httpx.AsyncClient(timeout=15) as client:
@@ -504,6 +535,17 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         msg += f'完全稀释市值:{utils.format_big_number(it.get("fdv", "-"))}\n\n'
                         msg += f'时间:{utils.time_to_string(now)}\n'
                         #msg += f'来源:Alpha PumpHunter'
+                        results = await get_holders_info(it.get("contractAddress",""),it.get("chainName",""))
+                        if results:
+                            top100_holder_percent = results.get('top100_holder_percent',0)
+                            top10_holder_percent = results.get('top10_holder_percent',0)
+                            top100_holder_percent = float(top100_holder_percent)*100
+                            top10_holder_percent = float(top10_holder_percent)*100
+                            msg += f'\n前100持有者占比:{top100_holder_percent:.2f}%\n'
+                            msg += f'前10持有者占比:{top10_holder_percent:.2f}%\n'
+                        else:
+                            msg += f'\n{it.get("chainName","")}链无法获取持有者数据\n'
+                            logger.warning(f"Failed to get holders info for {sym}")
                         history = report_history.get(sym, [])
                         history.append((now, last_px, change))
                         report_history[sym] = history

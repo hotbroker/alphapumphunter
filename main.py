@@ -334,7 +334,7 @@ async def report_history_ranked(history_ranked,alphalist):
             continue
         marketCap = hv.get("marketCap",0)
         marketCap = float(marketCap)
-        if marketCap and marketCap>25000000:
+        if marketCap and marketCap>25000000*100:
             continue
 
         if hv.get("symbol") not in alphalist:
@@ -488,7 +488,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         continue
                     marketCap = it.get("marketCap",0)
                     marketCap = float(marketCap)
-                    if marketCap and marketCap>25000000:# 过滤市值大于1500万的币种
+                    if marketCap and marketCap>25000000*100:# 过滤市值大于1500万的币种
                         continue
                     px = mw_price(it)
                     if px is None or px <= 0:

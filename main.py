@@ -401,7 +401,8 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
     chainid = chainName.get(alphachainName,'')
     if not chainid:
         return None
-    url=f'https://gmgn.ai/vas/api/v1/token_holders/{chainid}/{contract_address}'
+    url=f'https://gmgn.ai/api/v1/token_trends/{chainid}/{contract_address}?trends_type=avg_holding_balance&trends_type=holder_count&trends_type=top10_holder_percent&trends_type=top100_holder_percent'
+    #url=f'https://gmgn.ai/vas/api/v1/token_holders/{chainid}/{contract_address}'
     headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'Accept': 'application/json',
@@ -421,7 +422,7 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
                 results[dt] = vallist[-1] if vallist else 0
             return results
     except Exception as e:
-        logger.warning(f"Failed to get holders count for {contract_address}: {e}")
+        logger.opt(exception=True).warning(f"Failed to get holders count for {contract_address}: {e}")
         return None
     
 async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, refresh_minutes: int, log_level: str, cooldown_minutes: int):

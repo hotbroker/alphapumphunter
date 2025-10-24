@@ -410,6 +410,7 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
     'Connection': 'keep-alive',
 }
     try:
+        print(url)
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, headers=headers)
             r.raise_for_status()
@@ -418,7 +419,8 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
             results = {}
             for dt in datalist:
                 vallist=  trends.get(dt,[])
-                results[dt] = vallist[-1] if vallist else 0
+                results[dt] = vallist[-1]['value'] if vallist else 0
+            logger.info(f'holders info for {contract_address} : {results}')
             return results
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get holders count for {contract_address}: {e}")

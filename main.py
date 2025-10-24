@@ -544,12 +544,16 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         #msg += f'来源:Alpha PumpHunter'
                         results = await get_holders_info(it.get("contractAddress",""),it.get("chainName",""))
                         if results:
+                            fdv = float(it.get("fdv", 0))
                             top100_holder_percent = results.get('top100_holder_percent',0)
                             top10_holder_percent = results.get('top10_holder_percent',0)
+                            top100_holder_fdv = float(top100_holder_percent)*fdv
+                            top10_holder_fdv = float(top10_holder_percent)*fdv
+
                             top100_holder_percent = float(top100_holder_percent)*100
                             top10_holder_percent = float(top10_holder_percent)*100
-                            msg += f'\n前100持有者占比:{top100_holder_percent:.2f}%\n'
-                            msg += f'前10持有者占比:{top10_holder_percent:.2f}%\n'
+                            msg += f'\n前100持有者占比:{top100_holder_percent:.2f}%({utils.format_big_number(top100_holder_fdv)})\n'
+                            msg += f'前10持有者占比:{top10_holder_percent:.2f}%({utils.format_big_number(top10_holder_fdv)})\n'
                         else:
                             msg += f'\n{it.get("chainName","")}链无法获取持有者数据\n'
                             logger.warning(f"Failed to get holders info for {sym}")

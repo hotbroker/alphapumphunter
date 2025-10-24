@@ -379,13 +379,13 @@ def save_highest_record(history_ranked,item):
         highesttiem = symitem.get('highest')
         alerttime = symitem.get('alerttime')
         elapsed = time.time() -alerttime
-        if elapsed > 3600*24*5:
-            return
+        # if elapsed > 3600*24*5:
+        #     return history_ranked
 
         if highesttiem is None:
             symitem['highest'] = item
         else:
-            logger.info(f'new high for {sym} oldprice {highesttiem.get("price",0)} newprice {item.get("price",0)}')
+            #logger.info(f'new high for {sym} oldprice {highesttiem.get("price",0)} newprice {item.get("price",0)}')
             oldprice = float(highesttiem.get('price',0))
             newprice = float(item.get('price',0))
             if newprice > oldprice:

@@ -377,6 +377,11 @@ def save_highest_record(history_ranked,item):
     if history_ranked.get(sym) :
         symitem= history_ranked.get(sym)
         highesttiem = symitem.get('highest')
+        alerttime = symitem.get('alerttime')
+        elapsed = time.time() -alerttime
+        if elapsed > 3600*24*5:
+            return
+
         if highesttiem is None:
             symitem['highest'] = item
         else:
@@ -468,7 +473,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                 snapshot = await mw.alpha_items()
                 
                 now = time.time()
-                if now - last_report_rank > 3600*8:
+                if now - last_report_rank > 3600*4:
                     last_report_rank = now
                     snap_by_sym: Dict[str, dict] = {it['symbol']: it for it in snapshot}
                     await report_history_ranked(history_ranked,snap_by_sym)

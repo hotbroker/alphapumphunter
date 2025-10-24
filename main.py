@@ -397,6 +397,7 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
         'Solana':'sol',
         'BSC':'bsc',
         'Base':'base',
+        'Ethereum':'eth',
     }
     chainid = chainName.get(alphachainName,'')
     if not chainid:

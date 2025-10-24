@@ -392,6 +392,43 @@ def save_highest_record(history_ranked,item):
                 symitem['highest'] = item
     return history_ranked
     
+
+async def get_holders_info2(url,datalist=['top100_holder_percent','top10_holder_percent']) -> dict:
+    logger.info(f'get holders info from fallback url: {url}')
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Connection': 'keep-alive',
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            js = r.json()
+            holder_list = js.get("data", {}).get("list", [])
+            logger.info(f'number of holders retrieved: {len(holder_list)}')
+            
+            # Sort holders by amount_percentage in descending order
+            sorted_holders = sorted(holder_list, key=lambda x: float(x.get("amount_percentage", 0)), reverse=True)
+            
+            results = {}
+            if "top100_holder_percent" in datalist and len(sorted_holders) > 0:
+                top100 = sorted_holders[:100]
+                print(f'length of top100 holders: {len(top100)},first item: {top100[0]["amount_percentage"]}')
+                top100_percent = sum(float(h.get("amount_percentage", 0)) for h in top100)
+                results["top100_holder_percent"] = top100_percent 
+                
+            if "top10_holder_percent" in datalist and len(sorted_holders) > 0:
+                top10 = sorted_holders[:10]
+                top10_percent = sum(float(h.get("amount_percentage", 0)) for h in top10)
+                results["top10_holder_percent"] = top10_percent 
+                
+            return results
+            
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Failed to get holders info from {url}: {e}")
+        return None
+        
 async def get_holders_info(contract_address: str,alphachainName,datalist=['top100_holder_percent','top10_holder_percent']) -> list[int]:
     chainName={
         'Solana':'sol',
@@ -411,6 +448,7 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
 }
     try:
         print(url)
+        newurl = f'https://gmgn.ai/vas/api/v1/token_holders/{chainid}/{contract_address}?limit=100&cost=20&orderby=amount_percentage&direction=desc'
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, headers=headers)
             r.raise_for_status()
@@ -419,13 +457,43 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
             results = {}
             for dt in datalist:
                 vallist=  trends.get(dt,[])
-                results[dt] = vallist[-1]['value'] if vallist else 0
+                if vallist:
+                    results[dt] = vallist[-1]['value'] if vallist else 0
+            if not results:
+                results= await get_holders_info2(newurl,datalist)
+            if results:
+                results['cexdata'] = await utils.get_holders_cex(newurl)
             logger.info(f'holders info for {contract_address} : {results}')
             return results
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get holders count for {contract_address}: {e}")
         return None
     
+async def test(ca,chainid,fdv=100*1000*1000):
+        results = await get_holders_info(ca,chainid)
+        msg = ""
+        if results:
+            top100_holder_percent = results.get('top100_holder_percent',0)
+            top10_holder_percent = results.get('top10_holder_percent',0)
+            top100_holder_fdv = float(top100_holder_percent)*fdv
+            top10_holder_fdv = float(top10_holder_percent)*fdv
+
+            top100_holder_percent = float(top100_holder_percent)*100
+            top10_holder_percent = float(top10_holder_percent)*100
+            msg += f'\n前100持有者占比:{top100_holder_percent:.2f}%({utils.format_big_number(top100_holder_fdv)})\n'
+            msg += f'前10持有者占比:{top10_holder_percent:.2f}%({utils.format_big_number(top10_holder_fdv)})\n'
+            cexdata = results.get('cexdata',{})
+            if cexdata:
+                #减去前10，再加上CEX的持有比例
+                cex_percent = sum(cexdata.values())
+                adjusted_top10_percent = 1-top10_holder_percent/100 + cex_percent
+                normalholoder = adjusted_top10_percent*fdv
+                msg += f'减去前10大户后:{utils.format_big_number(normalholoder)})\n'    
+                cexholder = cex_percent*fdv    
+                cex_percent =cexholder/normalholoder*100
+                msg += f'其中交易所持有:{utils.format_big_number(cexholder)}，占比{cex_percent:.2f}%\n'
+        print(msg)
+
 async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, refresh_minutes: int, log_level: str, cooldown_minutes: int):
     setup_logger(log_level or os.getenv("APH_LOG_LEVEL", "INFO"))
     async with httpx.AsyncClient(timeout=15) as client:
@@ -450,6 +518,11 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
         next_refresh = time.time() + refresh_minutes * 60
         last_report_rank =0
+        testresult = await test('0xc9ccbd76c2353e593cc975f13295e8289d04d3bb','BSC')
+        print(f'test holders info: {testresult}')
+        # newurl = f'https://gmgn.ai/vas/api/v1/token_holders/bsc/0xc9ccbd76c2353e593cc975f13295e8289d04d3bb?limit=100&cost=20&orderby=amount_percentage&direction=desc'
+        # testresult = await utils.get_holders_cex(newurl)
+        # print(f'test holders info from fallback url: {testresult}')
         while True:
             bypass = get_bypass_token()
             bypass = [x.strip().upper() for x in bypass if x.strip()]
@@ -554,6 +627,16 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             top10_holder_percent = float(top10_holder_percent)*100
                             msg += f'\n前100持有者占比:{top100_holder_percent:.2f}%({utils.format_big_number(top100_holder_fdv)})\n'
                             msg += f'前10持有者占比:{top10_holder_percent:.2f}%({utils.format_big_number(top10_holder_fdv)})\n'
+                            cexdata = results.get('cexdata',{})
+                            if cexdata:
+                                #减去前10，再加上CEX的持有比例
+                                cex_percent = sum(cexdata.values())
+                                adjusted_top10_percent = 1-top10_holder_percent/100 + cex_percent
+                                normalholoder = adjusted_top10_percent*fdv
+                                cexholder = cex_percent*fdv
+                                msg += f'减去前10大户后:{utils.format_big_number(normalholoder)}\n'
+                                cex_percent =cexholder/normalholoder*100
+                                msg += f'其中交易所持有:{utils.format_big_number(cexholder)}，占比{cex_percent:.2f}%\n'
                         else:
                             msg += f'\n{it.get("chainName","")}链无法获取持有者数据\n'
                             logger.warning(f"Failed to get holders info for {sym}")

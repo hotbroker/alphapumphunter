@@ -1,4 +1,5 @@
-
+from loguru import logger
+import httpx
 def format_big_number(num):
     num = float(num)
     if num >= 1000000:
@@ -29,3 +30,34 @@ def format_day_hour_minute(seconds):
         if not days:
             parts.append(f"{int(seconds)}s")
     return ' '.join(parts)
+
+
+
+async def get_holders_cex(url) -> dict:
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Connection': 'keep-alive',
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            js = r.json()
+            holder_list = js.get("data", {}).get("list", [])
+            logger.info(f'number of holders retrieved: {len(holder_list)}')
+            
+            # Sort holders by amount_percentage in descending order
+            sorted_holders = sorted(holder_list, key=lambda x: float(x.get("amount_percentage", 0)), reverse=True)
+            #holder has name
+            results = {}
+            results = {h.get('name'):float(h.get("amount_percentage", 0)) for h in sorted_holders if h.get("name")}
+            logger.info(f'number of holders with name: {results}')
+            
+            return results
+            
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Failed to get holders info from {url}: {e}")
+        return None
+    

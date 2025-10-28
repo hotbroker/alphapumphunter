@@ -22,7 +22,7 @@ if __name__ == "__main__":
 logger.info(f'start with file {os.path.basename(os.path.abspath(__file__))} pid {os.getpid()}@ filetime {datetime.fromtimestamp(os.path.getctime(os.path.abspath(__file__))).strftime("%Y-%m-%d, %H:%M:%S")}')
 
 
-
+alpha_hunter_group='53806935982@chatroom'
 MARKETWEBB_AGGREGATE = "https://www.marketwebb.co/bapi/defi/v1/public/alpha-trade/aggTicker24"
 MARKETWEBB_FAPI_OI = "https://www.marketwebb.co/fapi/v1/openInterest"
 MARKETWEBB_SPOT_AGGTRADES = "https://www.marketwebb.co/api/v3/aggTrades"
@@ -369,7 +369,7 @@ async def report_history_ranked(history_ranked,alphalist):
                 repportmsg += f'{cnt}）{sym} {perc:.2f}%   ({priceperc:.2f}%){fired}\n\n'
         repportmsg += f'\n\n总计{len(sorted_pumplog)}个币种在过去5天内被提示过\n\n'
         print(repportmsg)
-        await send_notification_async('51782135279@chatroom', repportmsg, title="Alpha PumpHunter Alert\n")
+        await send_notification_async(alpha_hunter_group, repportmsg, title="Alpha PumpHunter Alert\n")
 
 def save_highest_record(history_ranked,item):
     sym = item.get("symbol","-")
@@ -652,7 +652,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             msg +=f'距离第一次提示价格 涨幅 【{priceperc:.2f}%】\n'
 
                         print(msg)
-                        await send_notification_async('51782135279@chatroom', msg, title="Alpha PumpHunter Alert\n")
+                        await send_notification_async(alpha_hunter_group, msg, title="Alpha PumpHunter Alert\n")
                 # pacing
                 elapsed = time.time() - tick_start
                 sleep_for = max(0.0, interval - elapsed)

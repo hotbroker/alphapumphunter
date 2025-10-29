@@ -42,6 +42,7 @@ async def get_holders_cex(url) -> dict:
     }
     try:
         async with httpx.AsyncClient(timeout=10) as client:
+            print(f'get holder cex {url}')
             r = await client.get(url, headers=headers)
             r.raise_for_status()
             js = r.json()

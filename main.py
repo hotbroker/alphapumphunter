@@ -461,7 +461,7 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
                     results[dt] = vallist[-1]['value'] if vallist else 0
             top100_holder_percent = float(results.get('top100_holder_percent',0))
             top10_holder_percent = float(results.get('top10_holder_percent',0))
-            if not results or top100_holder_percent>1 or top10_holder_percent>1:
+            if not results or top100_holder_percent>1 or top10_holder_percent>1 or top100_holder_percent==0 or top10_holder_percent==0:
                 results= await get_holders_info2(newurl,datalist)
                 logger.info(f'fix holders info for {contract_address} : {results}')
             if results:

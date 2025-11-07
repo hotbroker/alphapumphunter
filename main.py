@@ -656,11 +656,6 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             logger.info(f"Token {sym} in bypass list, skip alert")
                             continue
 
-                        if history_ranked.get(sym) is None:
-                            newit = dict(it)
-                            newit['alerttime'] = now
-                            history_ranked[sym] = newit
-                            save_history(history_ranked)
 
                         '''上报的时候带上这些字段
 
@@ -680,6 +675,14 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         if volumndata:
                             goodvibe="能量一般"
                             volumndata =volumndata [-9:]
+                            lowlist = [float(k[3]) for k in volumndata]
+                            high = [float(k[2]) for k in volumndata]
+                            minprice = min(lowlist)
+                            maxprice = max(high)
+                            diffper = (maxprice-minprice)/minprice
+                            if diffper<0.1:
+                                logger.warning(f'误报，没有这么多的波动价格 minprice {minprice} -> maxprice {maxprice}')
+                                
                             volUSDlist = [float(k[7]) for k in volumndata]
                             vollist = [utils.format_big_number(float(k[7])) for k in volumndata]
                             takervol = [float(k[10])/float(k[7]) for k in volumndata]
@@ -701,7 +704,16 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 goodvibe="能量不错"
                                 if lastMax>2000*10000:
                                     goodvibe="能量波动相当好🔥"
+                            if max(volUSDlist)<100*10000:
+                                goodvibe="能量很差，可能误报"
+                                logger.warning(f'能量很差，可能误报 {volUSDlist}')
+                                continue
 
+                        if history_ranked.get(sym) is None:
+                            newit = dict(it)
+                            newit['alerttime'] = now
+                            history_ranked[sym] = newit
+                            save_history(history_ranked)
 
 
                         msg = f'符号:{sym}\n'

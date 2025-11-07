@@ -675,15 +675,42 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         
                         volumndata = await utils.get_continuousKlines(sym)
                         vollist=None
+                        goodvibe=''
+                        takervol=""
                         if volumndata:
-                            volumndata =volumndata [-5:]
+                            goodvibe="能量一般"
+                            volumndata =volumndata [-9:]
                             vollist = [utils.format_big_number(float(k[7])) for k in volumndata]
+                            takervol = [float(k[10])/float(k[7]) for k in volumndata]
+                            takervol = [int(x*100)/100 for x in takervol]
                             print(f'{sym} last 15m vol vollist {vollist}')
+                            last2 = vollist[-2:]
+                            first5 = vollist[:5]
+                            lastMax = max(last2)
+                            #sort first5
+                            first5.sort()
+                            afterminmax = first5[1:-2]
+                            average = sum(afterminmax)/len(afterminmax)
+
+                            good1 = lastMax>800*10000 and lastMax/average>8
+                            
+                            if good1:
+                                goodvibe="能量不错"
+                                if lastMax>2000*10000:
+                                    goodvibe="能量波动相当好🔥"
+
+
 
                         msg = f'符号:{sym}\n'
                         msg += f'当前价:{last_px:.8g}\n'
                         if vollist:
-                            msg += f'最新15分钟交易量列表:{vollist}\n'
+                            msg += f'最新15分钟交易量列表:\n{vollist[-5]}\n'
+                            if goodvibe:
+                                msg += f'\n{goodvibe}\n\n'
+                            
+                            if takervol:
+                                msg += f'买入情绪列表:\n{takervol}\n\n'
+                            
                         msg += f'涨幅:{change:.2f}%\n\n'
 
                         #msg += f'窗口:{window_min}分钟\n'

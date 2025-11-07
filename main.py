@@ -500,6 +500,30 @@ async def test(ca,chainid,fdv=100*1000*1000):
                 msg += f'其中交易所持有:{utils.format_big_number(cexholder)}，占比{cex_percent:.2f}%\n'
         print(msg)
 
+async def get_symbol_future_price(symbol):
+    symbol = symbol.upper()
+    url=f'https://www.binance.com/fapi/v1/ticker/price?symbol={symbol}USDT'
+    headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
+    'Connection': 'keep-alive',
+}
+    
+    try:
+        print(url)
+        
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            js = r.json()
+            #{"symbol":"GIGGLEUSDT","price":"177.01000","time":1762502965047}
+            price= js.get("price")
+            return price
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Failed to get_symbol_future_price {symbol}: {e}")
+        return None
+    
+
 async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, refresh_minutes: int, log_level: str, cooldown_minutes: int):
     setup_logger(log_level or os.getenv("APH_LOG_LEVEL", "INFO"))
     async with httpx.AsyncClient(timeout=15) as client:
@@ -526,9 +550,13 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         last_report_rank =0
         testresult = await test('0xc9ccbd76c2353e593cc975f13295e8289d04d3bb','BSC')
         print(f'test holders info: {testresult}')
+        testsym = "GIGGLE"
+        testprice = await get_symbol_future_price(testsym)
+        print(f'test sym {testsym} price {testprice}')
         # newurl = f'https://gmgn.ai/vas/api/v1/token_holders/bsc/0xc9ccbd76c2353e593cc975f13295e8289d04d3bb?limit=100&cost=20&orderby=amount_percentage&direction=desc'
         # testresult = await utils.get_holders_cex(newurl)
         # print(f'test holders info from fallback url: {testresult}')
+        time.sleep(2)
         while True:
             bypass = get_bypass_token()
             bypass = [x.strip().upper() for x in bypass if x.strip()]
@@ -577,6 +605,24 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                     px = mw_price(it)
                     if px is None or px <= 0:
                         continue
+                    sym = it.get('symbol',0)
+                    if not sym:
+                        logger.warning(f'fail to get symbol for token_id {token_id}')
+                        await asyncio.sleep(5)
+                        continue
+
+                    futureprice = await get_symbol_future_price(sym)
+                    if futureprice:
+                        futureprice = float(futureprice)
+                        dif = futureprice-px
+                        absdif = abs(dif)
+                        absdifper = absdif/px
+                        if absdifper>3:
+                            logger.error(f'price error for sym {sym} futureprice {futureprice} ,alpha price {px}')
+                            continue
+
+
+                    #有时候取的价格不太对
                     history_ranked = save_highest_record(history_ranked,it)
                     save_history(history_ranked)
                     tracker.add(token_id, now, px, window_secs)

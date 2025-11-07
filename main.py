@@ -672,8 +672,8 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         vollist=None
                         goodvibe=''
                         takervol=""
+                        history = report_history.get(sym, [])
                         if volumndata:
-                            goodvibe="能量一般"
                             volumndata =volumndata [-9:]
                             lowlist = [float(k[3]) for k in volumndata]
                             high = [float(k[2]) for k in volumndata]
@@ -682,7 +682,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             diffper = (maxprice-minprice)/minprice
                             if diffper<0.1:
                                 logger.warning(f'误报，没有这么多的波动价格 minprice {minprice} -> maxprice {maxprice}')
-                                
+
                             volUSDlist = [float(k[7]) for k in volumndata]
                             vollist = [utils.format_big_number(float(k[7])) for k in volumndata]
                             takervol = [float(k[10])/float(k[7]) for k in volumndata]
@@ -704,6 +704,10 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 goodvibe="能量不错"
                                 if lastMax>2000*10000:
                                     goodvibe="能量波动相当好🔥"
+                            else:
+                                if not history: #first time
+                                    goodvibe="能量一般"
+
                             if max(volUSDlist)<100*10000:
                                 goodvibe="能量很差，可能误报"
                                 logger.warning(f'能量很差，可能误报 {volUSDlist}')
@@ -716,7 +720,10 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             save_history(history_ranked)
 
 
-                        msg = f'符号:{sym}\n'
+                        msg = ''
+                        if not history:
+                            msg += f'(第一次提示)\n'
+                        msg += f'符号:{sym}\n'
                         msg += f'当前价:{last_px:.8g}\n'
                         if vollist:
                             msg += f'最新15分钟交易量列表:\n{vollist[-5:]}\n'
@@ -726,7 +733,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             if takervol:
                                 msg += f'买入情绪列表:\n{takervol}\n\n'
                             
-                        msg += f'涨幅:{change:.2f}%\n\n'
+                        msg += f'10分钟涨幅:{change:.2f}%\n'
 
                         #msg += f'窗口:{window_min}分钟\n'
                         msg += f'24小时涨幅:{str(it.get("percentChange24h", "-"))}%\n'
@@ -765,7 +772,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         history.append((now, last_px, change))
                         report_history[sym] = history
                         if len(history) > 1:
-                            msg +=f'\n\n\n第一次提示时间:{utils.time_to_string(history[0][0])}\n'
+                            msg +=f'\n\n\n【{sym}】第一次提示时间:{utils.time_to_string(history[0][0])}\n'
                             priceidff = last_px - history[0][1]
                             priceperc = priceidff/history[0][1]*100
                             elapsed=now-history[0][0]

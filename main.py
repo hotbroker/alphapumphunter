@@ -332,9 +332,12 @@ async def report_history_ranked(history_ranked,alphalist):
         elapsed = time.time() - hv.get("alerttime",0)
         if elapsed > 3600*24*5:
             continue
+        offline = hv.get("offline",True)
+        if offline:
+            continue
         marketCap = hv.get("marketCap",0)
         marketCap = float(marketCap)
-        if marketCap and marketCap>25000000*100:
+        if marketCap and marketCap>25000000*1000:
             continue
 
         if hv.get("symbol") not in alphalist:
@@ -563,6 +566,9 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                 for token_id in list(tracked_ids):
                     it = snap_by_id.get(token_id)
                     if not it:
+                        continue
+                    offline = it.get("offline",True)
+                    if offline:
                         continue
                     marketCap = it.get("marketCap",0)
                     marketCap = float(marketCap)

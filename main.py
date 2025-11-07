@@ -510,8 +510,7 @@ async def get_symbol_future_price(symbol):
 }
     
     try:
-        print(url)
-        
+
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, headers=headers)
             r.raise_for_status()

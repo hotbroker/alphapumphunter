@@ -62,3 +62,43 @@ async def get_holders_cex(url) -> dict:
         logger.opt(exception=True).warning(f"Failed to get holders info from {url}: {e}")
         return None
     
+
+async def get_continuousKlines(symbol, interval='15m',limit=1000):
+    '''[
+  [
+    1607444700000,      	// Open time
+    "18879.99",       	 	// Open
+    "18900.00",       	 	// High
+    "18878.98",       	 	// Low
+    "18896.13",      	 	// Close (or latest price)
+    "492.363", 			 	// Volume #币个数 
+    1607444759999,       	// Close time
+    "9302145.66080",    	// Quote asset volume #usdt计价
+    1874,             		// Number of trades
+    "385.983",    			// Taker buy volume
+    "7292402.33267",      	// Taker buy quote asset volume
+    "0" 					// Ignore.
+  ]
+]
+'''
+    symbol = symbol.upper()
+    #https://www.binance.com/fapi/v1/continuousKlines?interval=15m&limit=10&pair=PROMPTUSDT&contractType=PERPETUAL
+    url = f'https://www.binance.com/fapi/v1/continuousKlines?interval={interval}&limit={limit}&pair={symbol}USDT&contractType=PERPETUAL'
+    headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
+    'Connection': 'keep-alive',
+}
+    
+    try:
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            js = r.json()
+ 
+            return js
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Failed to get_continuousKlines {symbol}: {e}")
+        return None
+            

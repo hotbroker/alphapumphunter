@@ -522,7 +522,7 @@ async def get_symbol_future_price(symbol):
         logger.opt(exception=True).warning(f"Failed to get_symbol_future_price {symbol}: {e}")
         return None
     
-
+    
 async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, refresh_minutes: int, log_level: str, cooldown_minutes: int):
     setup_logger(log_level or os.getenv("APH_LOG_LEVEL", "INFO"))
     async with httpx.AsyncClient(timeout=15) as client:
@@ -552,6 +552,12 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         testsym = "GIGGLE"
         testprice = await get_symbol_future_price(testsym)
         print(f'test sym {testsym} price {testprice}')
+        testKline = await utils.get_continuousKlines(testsym)
+        if testKline:
+            testKline =testKline [-5:]
+            vollist = [utils.format_big_number(float(k[7])) for k in testKline]
+            print(f'last 15m vol vollist {vollist}')
+        
         # newurl = f'https://gmgn.ai/vas/api/v1/token_holders/bsc/0xc9ccbd76c2353e593cc975f13295e8289d04d3bb?limit=100&cost=20&orderby=amount_percentage&direction=desc'
         # testresult = await utils.get_holders_cex(newurl)
         # print(f'test holders info from fallback url: {testresult}')
@@ -658,17 +664,28 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
                         '''上报的时候带上这些字段
 
-            "symbol": "RECALL",
-            "price": "0.44168423807006260037",
-            "percentChange24h": "21.45",
-            "volume24h": "53707125.237298721777540335684",
-            "marketCap": "88810253.61406077",
-            "fdv": "441684238.0700626",
-            "liquidity": "1832226.14027409274462",
-	'''
+                                "symbol": "RECALL",
+                                "price": "0.44168423807006260037",
+                                "percentChange24h": "21.45",
+                                "volume24h": "53707125.237298721777540335684",
+                                "marketCap": "88810253.61406077",
+                                "fdv": "441684238.0700626",
+                                "liquidity": "1832226.14027409274462",
+                        '''
+                        
+                        volumndata = await utils.get_continuousKlines(sym)
+                        vollist=None
+                        if volumndata:
+                            volumndata =volumndata [-5:]
+                            vollist = [utils.format_big_number(float(k[7])) for k in volumndata]
+                            print(f'{sym} last 15m vol vollist {vollist}')
+
                         msg = f'符号:{sym}\n'
                         msg += f'当前价:{last_px:.8g}\n'
-                        msg += f'涨幅:{change:.2f}%\n'
+                        if vollist:
+                            msg += f'最新15分钟交易量列表:{vollist}\n'
+                        msg += f'涨幅:{change:.2f}%\n\n'
+
                         #msg += f'窗口:{window_min}分钟\n'
                         msg += f'24小时涨幅:{str(it.get("percentChange24h", "-"))}%\n'
                         msg += f'24小时成交量:{utils.format_big_number(it.get("volume24h", "-"))}\n'

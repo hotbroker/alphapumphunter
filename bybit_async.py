@@ -111,12 +111,15 @@ async def place_contract_order(
         )
 
         # 4) Set leverage on both sides
-        http.set_leverage(
-            category="linear",
-            symbol=symbol,
-            buyLeverage=str(leverage),
-            sellLeverage=str(leverage),
-        )
+        try:
+            http.set_leverage(
+                category="linear",
+                symbol=symbol,
+                buyLeverage=str(leverage),
+                sellLeverage=str(leverage),
+            )
+        except:
+            pass
 
         # 5) Place market order
         order = http.place_order(
@@ -139,20 +142,24 @@ async def place_contract_order(
 
 
 async def get_position_profit(
-    symbol: str,
     api_key: str,
     api_secret: str,
+    symbol: Optional[str] = None,
     *,
     testnet: bool = True,
+    category: str = "linear",
+    settle_coin: Optional[str] = "USDT",
 ) -> Optional[float]:
     """
-    Query the unrealized PnL (USDT) for a USDT perpetual (linear) position.
+    Query unrealized PnL (USDT).
 
     Args:
-        symbol: Contract symbol like "BTCUSDT".
         api_key: Bybit API key.
         api_secret: Bybit API secret.
+        symbol: Contract symbol like "BTCUSDT". If None, sum all positions.
         testnet: Use Bybit testnet if True (default True).
+        category: Bybit category (default: "linear").
+        settle_coin: When symbol is None, filter by settle coin (default: "USDT").
 
     Returns:
         Unrealized PnL as float (USDT). None if no position found.
@@ -162,7 +169,14 @@ async def get_position_profit(
 
     def _sync_work() -> Optional[float]:
         http = _make_http_client(api_key, api_secret, testnet=testnet)
-        pos = http.get_positions(category="linear", symbol=symbol)
+        # If symbol is None, pybit will fetch all positions for the category
+        kwargs = {"category": category}
+        if symbol:
+            kwargs["symbol"] = symbol
+        else:
+            if settle_coin:
+                kwargs["settleCoin"] = settle_coin
+        pos = http.get_positions(**kwargs)
         items = pos.get("result", {}).get("list", [])
         if not items:
             return None
@@ -175,6 +189,6 @@ async def get_position_profit(
                     total += Decimal(str(pnl))
                 except Exception:
                     continue
-        return float(total)
+        return float(total),items
 
     return await loop.run_in_executor(None, _sync_work)

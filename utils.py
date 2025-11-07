@@ -1,5 +1,7 @@
 from loguru import logger
 import httpx
+import os,json
+
 def format_big_number(num):
     num = float(num)
     if num >= 1000000:
@@ -102,3 +104,17 @@ async def get_continuousKlines(symbol, interval='15m',limit=1000):
         logger.opt(exception=True).warning(f"Failed to get_continuousKlines {symbol}: {e}")
         return None
             
+
+def get_status(fname):
+    if os.path.exists(fname):
+        with open(fname, 'r',encoding='utf-8') as f:
+            last_push_notify = f.read()
+            if len(last_push_notify)>0:
+                return eval(last_push_notify)
+            
+    return None
+
+def save_status(fname,last_push_notify):
+    with open(fname, 'w') as f:
+        #f.write(last_push_notify.dumps())
+        json.dump(last_push_notify, f)

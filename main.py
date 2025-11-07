@@ -15,6 +15,7 @@ import utils
 
 import os
 from datetime import datetime, timedelta
+from bybit_async import place_contract_order, get_position_profit
 
 if __name__ == "__main__":
     logger.add("log{}.log".format(os.path.basename(os.path.abspath(__file__))), rotation="1 MB",retention="3 days",level="INFO")  # Rotate logs when they reach 1 MB
@@ -39,8 +40,31 @@ MARKETWEBB_HEADERS = {
     'Sec-Fetch-Site': 'cross-site',
 }
 
+vibeLevelPos={
+    1:50,
+    2:100,
+    3:200
+}
+    
+def load_keys() -> Tuple[str, str]:
+    """Load API key/secret from env or bybitKey.txt (two lines)."""
+    k = os.getenv("BYBIT_API_KEY")
+    s = os.getenv("BYBIT_API_SECRET")
+    if k and s:
+        return k, s
+    path = os.path.join(os.getcwd(), "bybitKey.txt")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            lines = [ln.strip() for ln in f.readlines() if ln.strip()]
+        if len(lines) >= 2:
+            return lines[0], lines[1]
+    raise SystemExit(
+        "Missing API credentials. Set BYBIT_API_KEY/BYBIT_API_SECRET or provide bybitKey.txt with two lines."
+    )
 
 
+
+api_key, api_secret = load_keys()
 
 def setup_logger(level: str):
     pass
@@ -304,6 +328,7 @@ def get_bypass_token():
         return []
     with open('bypass_token.txt','r') as f:
         return f.readlines()
+    
 def load_history():
     if not os.path.exists('history.json'):
         return {}
@@ -323,6 +348,15 @@ def save_history(history, path: str="history.json"):
         #logger.info(f"Saved history to {path}, {len(history)} entries")
     except Exception as e:
         logger.warning(f"Failed to save history to {path}: {e}")
+
+def load_order_list():
+    orders =  utils.get_status('orderlist.json')
+    if not orders:
+        orders={}
+    return orders
+
+def save_order_list(orderlist):
+    utils.save_status('orderlist.json',orderlist)
 
 async def report_history_ranked(history_ranked,alphalist):
     repportmsg = '历史上(5天)报过的币种列表:\n\n'
@@ -521,8 +555,35 @@ async def get_symbol_future_price(symbol):
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get_symbol_future_price {symbol}: {e}")
         return None
+
+
+async def place_future_order(sym,vibelevel):
+    possize = vibeLevelPos[vibelevel]
+
+    if not sym.endswith("USDT"):
+        sym = sym+"USDT"
+    # Place order
+    place_res = None
     
-    
+    try:
+        place_res = await place_contract_order(
+            symbol=sym.upper(),
+            leverage=10,
+            usdt_value=possize,
+            api_key=api_key,
+            api_secret=api_secret,
+            testnet=False,
+        )
+        logger.info(f"Order response: {place_res}")
+        #Order response: {'price': 103388.5, 'qty': '0.001', 'response': {'retCode': 0, 'retMsg': 'OK', 'result': {'orderId': '7f9658d5-ebe8-4595-a065-d77eb435b3a7', 'orderLinkId': ''}, 'retExtInfo': {}, 'time': 1762551268306}}
+        retCode = place_res.get('place_res',{}).get('retCode')
+        if retCode==0:
+            return place_res
+        
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Place order failed: {e}")
+
+
 async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, refresh_minutes: int, log_level: str, cooldown_minutes: int):
     setup_logger(log_level or os.getenv("APH_LOG_LEVEL", "INFO"))
     async with httpx.AsyncClient(timeout=15) as client:
@@ -544,6 +605,8 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         cooldown_secs = cooldown_minutes * 60 if cooldown_minutes > 0 else 0
         last_alert_ts: Dict[str, float] = {}
         report_history={}
+        if utils.get_status('report_history.json'):
+            report_history = utils.get_status('report_history.json')
 
         next_refresh = time.time() + refresh_minutes * 60
         last_report_rank =0
@@ -561,8 +624,17 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         # newurl = f'https://gmgn.ai/vas/api/v1/token_holders/bsc/0xc9ccbd76c2353e593cc975f13295e8289d04d3bb?limit=100&cost=20&orderby=amount_percentage&direction=desc'
         # testresult = await utils.get_holders_cex(newurl)
         # print(f'test holders info from fallback url: {testresult}')
-        time.sleep(2)
+        
         round=0
+        orderlist = load_order_list()
+        
+        # await place_future_order("AR",1)
+        # profit,detail = await get_position_profit(api_key,api_secret, testnet=False)
+        # pnldetail = {item['symbol']:item['unrealisedPnl'] for item in detail}
+        # print(f'profit :{profit}, pnldetail {pnldetail}')
+
+        time.sleep(2)
+        report_pnl_time=0
         while True:
             num = len(list(tracked_ids))
             round = round+1
@@ -570,6 +642,21 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
             bypass = get_bypass_token()
             bypass = [x.strip().upper() for x in bypass if x.strip()]
             tick_start = time.time()
+
+            if tick_start-report_pnl_time>3600*8:
+                report_pnl_time=tick_start
+                prodetail= await get_position_profit(api_key,api_secret, testnet=False)
+                if prodetail:
+                    profit,detail =prodetail
+                    pnldetail = {item['symbol']:float(item['unrealisedPnl']) for item in detail}
+                    msg=f'总利润：{profit:.2f}\n\n'
+                    msg +=f'仓位明细：\n'
+                    for k,v in pnldetail.items():
+                        msg +=f'{k[:-4]}：{v:.2f} USD\n'
+                    msg +=f'\n\n{utils.time_to_string(time.time())}'
+                    print(msg)
+                    await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
+
             try:
                 # optional refresh of universe
                 if tick_start >= next_refresh:
@@ -672,6 +759,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         vollist=None
                         goodvibe=''
                         takervol=""
+                        goodvibeLevel=0
                         history = report_history.get(sym, [])
                         if volumndata:
                             volumndata =volumndata [-9:]
@@ -702,22 +790,40 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             
                             if good1:
                                 goodvibe="能量不错"
+                                goodvibeLevel=2
                                 if lastMax>2000*10000:
+                                    goodvibeLevel=3
                                     goodvibe="能量波动相当好🔥"
+
                             else:
                                 if not history: #first time
                                     goodvibe="能量一般"
+                                    goodvibeLevel=1
 
                             if max(volUSDlist)<100*10000:
                                 goodvibe="能量很差，可能误报"
                                 logger.warning(f'能量很差，可能误报 {volUSDlist}')
                                 continue
+                        
 
                         if history_ranked.get(sym) is None:
                             newit = dict(it)
                             newit['alerttime'] = now
                             history_ranked[sym] = newit
                             save_history(history_ranked)
+
+                            order = orderlist.get(sym)
+                            if not order:
+                                placeorder = await place_future_order(sym,goodvibeLevel)
+                                if placeorder:
+                                    logger.info(f'succ place order 【{sym}】 goodvibeLevel {goodvibeLevel}')
+                                    orderlist[sym]={"placetime":int(time.time()),
+                                                    "vibelevel":goodvibeLevel,
+                                                    "orderRes":placeorder}
+                                    utils.save_status(orderlist)
+                            else:
+                                placetime = order.get('placetime')
+                                logger.info(f'already place order {sym} at placetime: {utils.time_to_string(placetime)}')
 
 
                         msg = ''
@@ -771,6 +877,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         history = report_history.get(sym, [])
                         history.append((now, last_px, change))
                         report_history[sym] = history
+                        utils.save_status('report_history.json',report_history)
                         if len(history) > 1:
                             msg +=f'\n\n\n【{sym}】第一次提示时间:{utils.time_to_string(history[0][0])}\n'
                             priceidff = last_px - history[0][1]

@@ -556,7 +556,11 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         # testresult = await utils.get_holders_cex(newurl)
         # print(f'test holders info from fallback url: {testresult}')
         time.sleep(2)
+        round=0
         while True:
+            num = len(list(tracked_ids))
+            round = round+1
+            logger.info(f'check round {round},number symbol {num}')
             bypass = get_bypass_token()
             bypass = [x.strip().upper() for x in bypass if x.strip()]
             tick_start = time.time()
@@ -590,7 +594,10 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
                 snap_by_id: Dict[str, dict] = {mw_token_key(it): it for it in snapshot}
 
-                for token_id in list(tracked_ids):
+                
+
+                for idx,token_id in enumerate(list(tracked_ids)):
+
                     it = snap_by_id.get(token_id)
                     if not it:
                         continue
@@ -605,6 +612,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                     if px is None or px <= 0:
                         continue
                     sym = it.get('symbol',0)
+                    
                     if not sym:
                         logger.warning(f'fail to get symbol for token_id {token_id}')
                         await asyncio.sleep(5)

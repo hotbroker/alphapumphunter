@@ -690,8 +690,10 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             lastMax = max(last2)
                             #sort first5
                             first5.sort()
-                            afterminmax = first5[1:-2]
+                            afterminmax = first5[1:-2]#去掉最大，去掉最小
                             average = sum(afterminmax)/len(afterminmax)
+                            if first5[0]>100*10000: #如果最小的有1m，其实不用去平均，就用最小的来比较
+                                average = first5[0]
 
                             good1 = lastMax>800*10000 and lastMax/average>8
                             

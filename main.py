@@ -705,7 +705,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         msg = f'符号:{sym}\n'
                         msg += f'当前价:{last_px:.8g}\n'
                         if vollist:
-                            msg += f'最新15分钟交易量列表:\n{vollist[-5]}\n'
+                            msg += f'最新15分钟交易量列表:\n{vollist[-5:]}\n'
                             if goodvibe:
                                 msg += f'\n{goodvibe}\n\n'
                             

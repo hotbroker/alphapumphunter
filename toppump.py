@@ -226,7 +226,7 @@ async def compute_energy(symbol_usdt: str) -> Dict[str, Any]:
     if first5_sorted and first5_sorted[0] > 100 * 10000:
         average_ref = first5_sorted[0]
 
-    good1 = last_max > 800 * 10000 and (average_ref > 0 and last_max / average_ref > 8)
+    good1 = last_max > 600 * 10000 and (average_ref > 0 and last_max / average_ref > 8)
     energy_level = 0
     energy_note = ""
     if good1:

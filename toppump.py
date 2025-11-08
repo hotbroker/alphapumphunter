@@ -191,7 +191,7 @@ async def compute_energy(symbol_usdt: str) -> Dict[str, Any]:
                 "vol_usd_list": [],
                 "taker_buy_ratio": [],
             })
-            print(f"Symbol {symbol_usdt} has insufficient price change in 15m intervals: {price_change_pct:.2f}%")
+            #print(f"Symbol {symbol_usdt} has insufficient price change in 15m intervals: {price_change_pct:.2f}%")
             return out
 
     try:
@@ -274,7 +274,7 @@ def filter_candidates(
         if chg < min_pct:
             continue
         out.append(r)
-    out.sort(key=lambda x: _to_float(x, "priceChangePercent", 0.0), reverse=True)
+    out.sort(key=lambda x: _to_float(x, "quoteVolume", 0.0), reverse=True)
     return out
 
 
@@ -488,13 +488,16 @@ async def cmd_run(
                             qv = _to_float(r, "quoteVolume")
                             vol_usd_list = en.get("vol_usd_list", [])
                             vol_last5 = vol_usd_list[-5:]
+                            star=""
+                            if energy_level>=3:
+                                star="⭐⭐⭐"
                             msg = []
                             msg.append(f"符号:{sym}")
                             msg.append(f"当前价:{last_px}")
                             msg.append(f"{window_min}分钟涨幅:{chg:.2f}%")
                             msg.append(f"24小时涨幅:{_to_float(r,'priceChangePercent'):.2f}%")
                             msg.append(f"24小时成交额:{format_big_number(qv)}")
-                            msg.append(f"15m能量:L{energy_level} {en.get('energy_note','')}")
+                            msg.append(f"15m能量:L{energy_level} {en.get('energy_note','')}{star}")
                             msg.append(f"15m成交额列:{[format_big_number(x) for x in vol_last5]}")
                             msg.append(f"买入情绪:{_format_buy_ratio(ratios)}")
                             msg.append(f"时间:{time_to_string(now_ts)}")
@@ -587,7 +590,7 @@ async def cmd_run_simple(
                             vol_last5 = vol_usd_list[-5:]
                             pct24 = _to_float(r, 'priceChangePercent')
                             msg = []
-                            msg.append(f"符号:【{sym[-4:]}】")
+                            msg.append(f"符号:【{_base_from_symbol(sym)}】")
                             msg.append(f"当前价:{last_price}")
                             msg.append(f"24小时涨幅:{pct24:.2f}%")
                             msg.append(f"24小时成交额:{format_big_number(qv)}")
@@ -596,7 +599,7 @@ async def cmd_run_simple(
                             msg.append(f"买入情绪:{_format_buy_ratio(ratios)}")
                             msg.append(f"时间:{time_to_string(now_ts)}")
                             content = "\n".join(msg)
-                            print(f"Sending alert notification for {sym}:\n{content}")
+                            logger.info(f"Sending alert notification for {sym}:\n{content}")
                             await send_notification_async(
                                 notify_to,
                                 content,

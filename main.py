@@ -806,8 +806,8 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 continue
                         
 
-                        if history_ranked.get(sym) is None:
-                            newit = dict(it)
+                        if history_ranked.get(sym) is None or abs(history_ranked.get(sym).get('alerttime')-time.time())>6*24*3600:
+                            newit = dict(it) #没报过，或者报警时间超过6天
                             newit['alerttime'] = now
                             history_ranked[sym] = newit
                             save_history(history_ranked)
@@ -876,6 +876,11 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             logger.warning(f"Failed to get holders info for {sym}")
                         history = report_history.get(sym, [])
                         history.append((now, last_px, change))
+                        elapsed=now-history[0][0]
+                        if elapsed >10*24*3600: # 10天 ，重置
+                            history = []
+                            history.append((now, last_px, change))
+
                         report_history[sym] = history
                         utils.save_status('report_history.json',report_history)
                         if len(history) > 1:

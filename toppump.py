@@ -587,7 +587,7 @@ async def cmd_run_simple(
                             vol_last5 = vol_usd_list[-5:]
                             pct24 = _to_float(r, 'priceChangePercent')
                             msg = []
-                            msg.append(f"符号:{sym}")
+                            msg.append(f"符号:【{sym[-4:]}】")
                             msg.append(f"当前价:{last_price}")
                             msg.append(f"24小时涨幅:{pct24:.2f}%")
                             msg.append(f"24小时成交额:{format_big_number(qv)}")
@@ -600,7 +600,7 @@ async def cmd_run_simple(
                             await send_notification_async(
                                 notify_to,
                                 content,
-                                title="补充其它币种提示",
+                                title="补充其它币种提示\n",
                                 endpoint=endpoint,
                             )
 

@@ -1,6 +1,7 @@
 from loguru import logger
 import httpx
 import os,json
+from typing import Deque, Dict, Iterable, List, MutableMapping, Optional, Set, Tuple
 
 def format_big_number(num):
     num = float(num)
@@ -118,3 +119,51 @@ def save_status(fname,last_push_notify):
     with open(fname, 'w') as f:
         #f.write(last_push_notify.dumps())
         json.dump(last_push_notify, f)
+
+def load_keys() -> Tuple[str, str]:
+    """Load API key/secret from env or bybitKey.txt (two lines)."""
+    k = os.getenv("BYBIT_API_KEY")
+    s = os.getenv("BYBIT_API_SECRET")
+    if k and s:
+        return k, s
+    path = os.path.join(os.getcwd(), "bybitKey.txt")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            lines = [ln.strip() for ln in f.readlines() if ln.strip()]
+        if len(lines) >= 2:
+            return lines[0], lines[1]
+    raise SystemExit(
+        "Missing API credentials. Set BYBIT_API_KEY/BYBIT_API_SECRET or provide bybitKey.txt with two lines."
+    )
+
+MARKETWEBB_AGGREGATE = "https://www.marketwebb.co/bapi/defi/v1/public/alpha-trade/aggTicker24"
+
+# Hardcoded MarketWebb headers (as provided by user)
+MARKETWEBB_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'cross-site',
+}
+
+
+async def get_alpha_tokens():
+    '''Get all alpha tokens from MarketWebb'''
+    
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(MARKETWEBB_AGGREGATE, headers=MARKETWEBB_HEADERS)
+            r.raise_for_status()
+            js = r.json()
+            tokens = js.get("data", [])
+            token_symbols = [t.get("symbol") for t in tokens if t.get("symbol")]
+            return token_symbols
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Failed to get alpha tokens from MarketWebb: {e}")
+        return None
+    
+    

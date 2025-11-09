@@ -10,13 +10,14 @@ from collections import defaultdict, deque
 import time
 import os
 from datetime import datetime, timedelta
-
+import utils
 
 if __name__ == "__main__":
     logger.add("log{}.log".format(os.path.basename(os.path.abspath(__file__))), rotation="1 MB",retention="3 days",level="INFO")  # Rotate logs when they reach 1 MB
 
 logger.info(f'start with file {os.path.basename(os.path.abspath(__file__))} pid {os.getpid()}@ filetime {datetime.fromtimestamp(os.path.getctime(os.path.abspath(__file__))).strftime("%Y-%m-%d, %H:%M:%S")}')
 
+api_key, api_secret = utils.load_keys()
 
 try:
     from utils import format_big_number, get_continuousKlines, time_to_string
@@ -51,6 +52,55 @@ except Exception:
         return _dt.fromtimestamp(ts).strftime('%Y-%m-%d, %H:%M:%S')
 
 
+from bybit_async import place_contract_order, get_position_profit
+vibeLevelPos={
+    1:50,
+    2:100,
+    3:200
+}
+    
+
+async def place_future_order(sym,vibelevel):
+    possize = vibeLevelPos[vibelevel]
+
+    if not sym.endswith("USDT"):
+        sym = sym+"USDT"
+    # Place order
+    place_res = None
+    
+    try:
+        place_res = await place_contract_order(
+            symbol=sym.upper(),
+            leverage=10,
+            usdt_value=possize,
+            api_key=api_key,
+            api_secret=api_secret,
+            testnet=False,
+        )
+        logger.info(f"Order response: {place_res}")
+        #Order response: {'price': 103388.5, 'qty': '0.001', 'response': {'retCode': 0, 'retMsg': 'OK', 'result': {'orderId': '7f9658d5-ebe8-4595-a065-d77eb435b3a7', 'orderLinkId': ''}, 'retExtInfo': {}, 'time': 1762551268306}}
+        retCode = place_res.get('response',{}).get('retCode')
+        if retCode==0:
+            return place_res
+        
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Place order failed: {e}")
+
+async def place_future_order_no_dup(sym,vibelevel):
+    prodetail= await get_position_profit(api_key,api_secret, testnet=False)
+    if prodetail:
+        profit,detail =prodetail
+        pnldetail = {item['symbol']:float(item['unrealisedPnl']) for item in detail}
+        for k,v in pnldetail.items():
+            holdingsym = k[:-4]
+            if holdingsym.upper() == sym.upper():
+                msg=f'检测到已有持仓，无法重复下单，当前持仓币种{holdingsym}，未实现盈亏 {v:.2f} USD\n\n'
+                logger.info(msg)
+                await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
+                return 
+    return await place_future_order(sym,vibelevel)
+
+
 async def send_notification_async(
     touser: str,
     content: str,
@@ -70,6 +120,24 @@ async def send_notification_async(
     except Exception as e:
         logger.warning(f"notify failed: {e}")
 
+'''[{'symbol': 'BTCUSDT', 'leverage': '10', 'autoAddMargin': 0, 'avgPrice': '101890', 'liqPrice': '', 'riskLimitValue': '2000000', 'takeProfit': '', 'positionValue': '101.89', 'isReduceOnly': False, 'positionIMByMp': '10.24145855', 'tpslMode': 'Full', 'riskId': 1, 'trailingStop': '0', 'unrealisedPnl': '0.02023', 'markPrice': '101910.23', 'adlRankIndicator': 2, 'cumRealisedPnl': '-0.42258646', 'positionMM': '0.5599867', 'createdTime': '1762550961148', 'positionIdx': 0, 'positionIM': '10.24145855', 'positionMMByMp': '0.5599867', 'seq': 477632622198, 'updatedTime': '1762607467807', 'side': 'Buy', 'bustPrice': '', 'positionBalance': '0', 'leverageSysUpdatedTime': '', 'curRealisedPnl': '-0.0560395', 'size': '0.001', 'positionStatus': 'Normal', 'mmrSysUpdatedTime': '', 'stopLoss': '', 'tradeMode': 0, 'sessionAvgPrice': ''}])'''
+async def report_pos_pnl():
+    prodetail= await get_position_profit(api_key,api_secret, testnet=False)
+    if prodetail:
+        profit,detail =prodetail
+        
+        pnldetail = {item['symbol']:float(item['unrealisedPnl']) for item in detail}
+        msg=f'总利润：{profit:.2f}\n\n'
+        msg +=f'仓位明细：\n'
+        for id,item in enumerate(detail):
+            
+            symbol = item['symbol'][:-4]
+            unrealisedPnl = float(item['unrealisedPnl'])
+            positionValue = float(item['positionValue'])
+            msg +=f'{id+1}){symbol}：{positionValue:.2f} USD({unrealisedPnl:.2f} USD)\n'
+        msg +=f'\n\n{utils.time_to_string(time.time())}'
+        print(msg)
+        await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")  
 
 @dataclass
 class PricePoint:
@@ -182,17 +250,19 @@ async def compute_energy(symbol_usdt: str) -> Dict[str, Any]:
     priceseries.sort()
     priceseries = priceseries[1:]  # remove min
     #price pump percent filter
-    if len(priceseries) >=2:
-        price_change_pct = (priceseries[-1] - priceseries[0]) / priceseries[0] *100
-        if price_change_pct <10.0:
-            out.update({
-                "energy_level": 0,
-                "energy_note": "价格波动不足10%",
-                "vol_usd_list": [],
-                "taker_buy_ratio": [],
-            })
-            #print(f"Symbol {symbol_usdt} has insufficient price change in 15m intervals: {price_change_pct:.2f}%")
-            return out
+    if len(priceseries) <3:
+        return out
+    price_change_pct = (priceseries[-1] - priceseries[0]) / priceseries[0] *100
+    price_change_pct2 = (priceseries[-2] - priceseries[1]) / priceseries[1] *100
+    if price_change_pct <10.0:
+        out.update({
+            "energy_level": 0,
+            "energy_note": "价格波动不足10%",
+            "vol_usd_list": [],
+            "taker_buy_ratio": [],
+        })
+        #print(f"Symbol {symbol_usdt} has insufficient price change in 15m intervals: {price_change_pct:.2f}%")
+        return out
 
     try:
         vol_usd_list = [float(k[7]) for k in volumndata]
@@ -246,6 +316,7 @@ async def compute_energy(symbol_usdt: str) -> Dict[str, Any]:
         "average_ref": average_ref,
         "vol_usd_list": vol_usd_list,
         "taker_buy_ratio": taker_buy_ratio,
+        "price_change_pct2":price_change_pct2,
     })
     return out
 
@@ -407,115 +478,13 @@ async def _scan_once(limit: int, min_quote: float, min_pct: float, only_usdt: bo
         except Exception as e:
             logger.warning(f"Failed to save JSON: {e}")
 
-
-async def cmd_run(
-    interval: int,
-    limit: int,
-    min_quote: float,
-    min_pct: float,
-    only_usdt: bool,
-    concurrency: int,
-    *,
-    notify: bool,
-    notify_to: str,
-    endpoint: str,
-    window_min: int,
-    threshold_pct: float,
-    cooldown_minutes: int,
-):
-    tracker = PriceTracker()
-    last_alert_ts: Dict[str, float] = {}
-    window_secs = int(window_min * 60)
-    cooldown_secs = int(cooldown_minutes * 60)
-
-    while True:
-        loop = asyncio.get_running_loop()
-        start = loop.time()
-        try:
-            # one scan pass
-            rows = await fetch_binance_futures_24h()
-            filtered = filter_candidates(
-                rows,
-                only_usdt=only_usdt,
-                min_quote_volume=min_quote,
-                min_pct=min_pct,
-            )
-
-            sem = asyncio.Semaphore(max(1, concurrency))
-
-            async def _task(r):
-                async with sem:
-                    energy = await compute_energy(r.get("symbol", ""))
-                    return r, energy
-
-            tasks = [asyncio.create_task(_task(r)) for r in filtered[: limit]]
-            pairs: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
-            if tasks:
-                for t in asyncio.as_completed(tasks):
-                    pairs.append(await t)
-
-            symbol_to_energy = {r.get("symbol"): e for r, e in pairs}
-
-            print("\nTop Pumps (24h) with 15m energy\n-------------------------------")
-            now_ts = time.time()
-            for i, r in enumerate(filtered[: limit], 1):
-                en = symbol_to_energy.get(r.get("symbol")) or {}
-
-                # Update tracker and compute short-window change
-                sym = r.get("symbol")
-                last_price = _to_float(r, "lastPrice", 0.0)
-                tracker.add(sym, now_ts, last_price, window_secs)
-                res = tracker.pct_change(sym, window_secs)
-
-                # Print line with buy ratios
-                line = format_row(r, en)
-                ratios = en.get("taker_buy_ratio", [])
-                line += f"  buy={_format_buy_ratio(ratios)}"
-                if res:
-                    chg, base_px, last_px = res
-                    line += f"  {window_min}m={chg:.2f}%"
-                print(f"{i:>2}. {line}")
-
-                # Push notification if enabled and conditions match
-                if notify and res:
-                    chg, base_px, last_px = res
-                    energy_level = int(en.get("energy_level", 0))
-                    if chg >= threshold_pct and energy_level >= 2:
-                        prev = last_alert_ts.get(sym, 0)
-                        if now_ts - prev >= cooldown_secs:
-                            last_alert_ts[sym] = now_ts
-                            # Build message
-                            qv = _to_float(r, "quoteVolume")
-                            vol_usd_list = en.get("vol_usd_list", [])
-                            vol_last5 = vol_usd_list[-5:]
-                            star=""
-                            if energy_level>=3:
-                                star="⭐⭐⭐"
-                            msg = []
-                            msg.append(f"符号:{sym}")
-                            msg.append(f"当前价:{last_px}")
-                            msg.append(f"{window_min}分钟涨幅:{chg:.2f}%")
-                            msg.append(f"24小时涨幅:{_to_float(r,'priceChangePercent'):.2f}%")
-                            msg.append(f"24小时成交额:{format_big_number(qv)}")
-                            msg.append(f"15m能量:L{energy_level} {en.get('energy_note','')}{star}")
-                            msg.append(f"15m成交额列:{[format_big_number(x) for x in vol_last5]}")
-                            msg.append(f"买入情绪:{_format_buy_ratio(ratios)}")
-                            msg.append(f"时间:{time_to_string(now_ts)}")
-                            content = "\n".join(msg)
-                            print(f"Sending alert notification for {sym}:\n{content}")
-                            await send_notification_async(
-                                notify_to,
-                                content,
-                                title="TopPump Alert",
-                                endpoint=endpoint,
-                            )
-        except Exception as e:
-            logger.opt(exception=True).warning(f"run loop error: {e}")
-        elapsed = loop.time() - start
-        wait = max(0.0, interval - elapsed)
-        await asyncio.sleep(wait)
-
-
+async def  is_bnalpha(symbol: str) -> bool:
+    alphatokens = await utils.get_alpha_tokens()
+    if not alphatokens:
+        return False
+    return symbol.upper() in alphatokens
+    
+    
 async def cmd_run_simple(
     interval: int,
     limit: int,
@@ -540,6 +509,18 @@ async def cmd_run_simple(
     last_alert_ts = {str(k): float(v) for k, v in last_alert_ts.items()} if last_alert_ts else {}
     cooldown_secs = int(cooldown_minutes * 60)
 
+    # sym = 'btc'
+    # energy_level = 2
+    # await report_pos_pnl()
+    # await place_future_order_no_dup("btc",2)
+    # await send_notification_async('veryverybad', f'下单 {sym} energy_level {energy_level}', title="bybit 自动下单合约\n\n")  
+    # await report_pos_pnl()
+
+    testtokens=["ALICE",'RHEA']
+    for t in testtokens:
+        isalpha = await is_bnalpha(t)
+        logger.info(f"Token {t} is alpha: {isalpha}")
+    time.sleep(2)
     while True:
         loop = asyncio.get_running_loop()
         start = loop.time()
@@ -576,6 +557,7 @@ async def cmd_run_simple(
 
                 line = format_row(r, en)
                 ratios = en.get("taker_buy_ratio", [])
+                price_change_pct2 = en.get("price_change_pct2",0.0)
                 line += f"  buy={_format_buy_ratio(ratios)}"
                 print(f"{i:>2}. {line}")
 
@@ -585,16 +567,27 @@ async def cmd_run_simple(
                         prev = last_alert_ts.get(sym, 0)
                         if now_ts - prev >= cooldown_secs:
                             last_alert_ts[sym] = now_ts
+                            res = await place_future_order_no_dup(sym,energy_level)
+                            success = res is not None
+                            await send_notification_async('veryverybad', f'下单 {_base_from_symbol(sym)} energy_level {energy_level}\n结果：{success}', title="bybit 自动下单合约\n\n")  
+                            await report_pos_pnl()
+
                             qv = _to_float(r, "quoteVolume")
                             vol_usd_list = en.get("vol_usd_list", [])
                             vol_last5 = vol_usd_list[-5:]
                             pct24 = _to_float(r, 'priceChangePercent')
                             msg = []
-                            msg.append(f"符号:【{_base_from_symbol(sym)}】")
+                            star=''
+                            if energy_level>2:
+                                star='⭐⭐⭐'
+                            isalpha = await is_bnalpha(_base_from_symbol(sym))
+                            isalphastr="币安alpha币" if isalpha else "不是币安alpha币"
+                            msg.append(f"符号:【{_base_from_symbol(sym)}】({isalphastr})")
                             msg.append(f"当前价:{last_price}")
+                            msg.append(f"最近2小时波动:{price_change_pct2:.2f}%")
                             msg.append(f"24小时涨幅:{pct24:.2f}%")
                             msg.append(f"24小时成交额:{format_big_number(qv)}")
-                            msg.append(f"15m能量:L{energy_level} {en.get('energy_note','')}")
+                            msg.append(f"15m能量:L{energy_level} {en.get('energy_note','')}{star}")
                             msg.append(f"15m成交额列:{[format_big_number(x) for x in vol_last5]}")
                             msg.append(f"买入情绪:{_format_buy_ratio(ratios)}")
                             msg.append(f"时间:{time_to_string(now_ts)}")

@@ -88,6 +88,7 @@ async def place_future_order(sym,vibelevel):
 
 async def place_future_order_no_dup(sym,vibelevel):
     prodetail= await get_position_profit(api_key,api_secret, testnet=False)
+    logger.info(f'before sym:{sym}current position detail: {prodetail}')
     if prodetail:
         profit,detail =prodetail
         pnldetail = {item['symbol']:float(item['unrealisedPnl']) for item in detail}
@@ -129,10 +130,17 @@ async def report_pos_pnl():
         pnldetail = {item['symbol']:float(item['unrealisedPnl']) for item in detail}
         msg=f'总利润：{profit:.2f}\n\n'
         msg +=f'仓位明细：\n'
+        #sortd  detail by unrealisedPnl
+        detail.sort(key=lambda x: float(x['unrealisedPnl']), reverse=True)
+        foundloss=False
         for id,item in enumerate(detail):
             
             symbol = item['symbol'][:-4]
             unrealisedPnl = float(item['unrealisedPnl'])
+            if unrealisedPnl<0 and not foundloss:
+                foundloss=True
+                msg +="\n"
+
             positionValue = float(item['positionValue'])
             msg +=f'{id+1}){symbol}：{positionValue:.2f} USD({unrealisedPnl:.2f} USD)\n'
         msg +=f'\n\n{utils.time_to_string(time.time())}'
@@ -514,12 +522,30 @@ async def cmd_run_simple(
     # await report_pos_pnl()
     # await place_future_order_no_dup("btc",2)
     # await send_notification_async('veryverybad', f'下单 {sym} energy_level {energy_level}', title="bybit 自动下单合约\n\n")  
-    # await report_pos_pnl()
-
+    await report_pos_pnl()
+    fundinghist=await utils.get_funding_rate_history("LSK")
+    logger.info(f'最近LSK funding rate历史：error msg {fundinghist.get('message','无数据')}')
+    logger.info(f'最近LSK funding rate历史：{fundinghist.get('data',[])[:5]}')
+    fundingdata = fundinghist.get('data',[])
+    latestfunding = fundingdata[:3]
+    for item in latestfunding:
+        frate = float(item.get('lastFundingRate',0.0))*100
+        ftime = item.get('calcTime','')
+        fundingIntervalHours= item.get('fundingIntervalHours',8)
+        ftimestr = utils.time_to_string(ftime/1000) if isinstance(ftime,(int,float)) else ftime
+        print(f"历史资金费率:{frate:.2f}% 时间:{ftimestr}({fundingIntervalHours}h)")    
+    testsym='PARTI'
+    realtime_fundingdata = await utils.get_realtime_funding_rate(testsym)
+    realTimeFundingRate=None
+    if realtime_fundingdata and realtime_fundingdata.get('lastFundingRate'):
+        realTimeFundingRate = float(realtime_fundingdata.get('lastFundingRate',0.0))*100
+        print(f"实时资金费率 {testsym}: {realTimeFundingRate:.2f}% ")
+                    
     testtokens=["ALICE",'RHEA']
     for t in testtokens:
         isalpha = await is_bnalpha(t)
         logger.info(f"Token {t} is alpha: {isalpha}")
+
     time.sleep(2)
     while True:
         loop = asyncio.get_running_loop()
@@ -579,9 +605,11 @@ async def cmd_run_simple(
                             msg = []
                             star=''
                             if energy_level>2:
-                                star='⭐⭐⭐'
+                                #fire
+                                star=' 🔥🔥🔥'
                             isalpha = await is_bnalpha(_base_from_symbol(sym))
                             isalphastr="币安alpha币" if isalpha else "不是币安alpha币"
+
                             msg.append(f"符号:【{_base_from_symbol(sym)}】({isalphastr})")
                             msg.append(f"当前价:{last_price}")
                             msg.append(f"最近2小时波动:{price_change_pct2:.2f}%")
@@ -590,6 +618,33 @@ async def cmd_run_simple(
                             msg.append(f"15m能量:L{energy_level} {en.get('energy_note','')}{star}")
                             msg.append(f"15m成交额列:{[format_big_number(x) for x in vol_last5]}")
                             msg.append(f"买入情绪:{_format_buy_ratio(ratios)}")
+                            last3 = ratios[-4:-1]
+                            if max(last3)<0.49:
+                                msg.append(f'卖出情绪较重，留意行情\n')
+                                
+
+                            fundinghist=await utils.get_funding_rate_history(sym)
+                            logger.info(f'最近 sym:{sym} funding rate历史：error msg {fundinghist.get('message','无数据')}') 
+                            realtime_fundingdata = await utils.get_realtime_funding_rate(sym)
+                            realTimeFundingRate=None
+                            if realtime_fundingdata and realtime_fundingdata.get('lastFundingRate'):
+                                realTimeFundingRate = float(realtime_fundingdata.get('lastFundingRate',0.0))*100                            
+                            fundingdata = fundinghist.get('data',[])
+                            if fundingdata:
+                                msg.append(f"\n最近三次资金费率记录:")
+                                if realTimeFundingRate is not None:
+                                    tag=""
+                                    if abs(realTimeFundingRate)>0.2:
+                                        tag=" ⚠️"
+                                    msg.append(f"实时资金费率: {realTimeFundingRate:.2f}%{tag}")
+                                latestfunding = fundingdata[:3]
+                                for item in latestfunding:
+                                    frate = float(item.get('lastFundingRate',0.0))*100
+                                    ftime = item.get('calcTime','')
+                                    fundingIntervalHours= item.get('fundingIntervalHours',8)
+                                    ftimestr = utils.time_to_string(ftime/1000) if isinstance(ftime,(int,float)) else ftime
+                                    msg.append(f"{frate:.2f}% 时间:{ftimestr}({fundingIntervalHours}h)")
+                                    
                             msg.append(f"时间:{time_to_string(now_ts)}")
                             content = "\n".join(msg)
                             logger.info(f"Sending alert notification for {sym}:\n{content}")

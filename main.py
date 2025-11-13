@@ -16,9 +16,10 @@ import utils
 import os
 from datetime import datetime, timedelta
 from bybit_async import place_contract_order, get_position_profit
+import toppump
 
 if __name__ == "__main__":
-    logger.add("log{}.log".format(os.path.basename(os.path.abspath(__file__))), rotation="1 MB",retention="3 days",level="INFO")  # Rotate logs when they reach 1 MB
+    logger.add("log{}.log".format(os.path.basename(os.path.abspath(__file__))), rotation="1 MB",retention="7 days",level="INFO")  # Rotate logs when they reach 1 MB
 
 logger.info(f'start with file {os.path.basename(os.path.abspath(__file__))} pid {os.getpid()}@ filetime {datetime.fromtimestamp(os.path.getctime(os.path.abspath(__file__))).strftime("%Y-%m-%d, %H:%M:%S")}')
 
@@ -46,25 +47,9 @@ vibeLevelPos={
     3:200
 }
     
-def load_keys() -> Tuple[str, str]:
-    """Load API key/secret from env or bybitKey.txt (two lines)."""
-    k = os.getenv("BYBIT_API_KEY")
-    s = os.getenv("BYBIT_API_SECRET")
-    if k and s:
-        return k, s
-    path = os.path.join(os.getcwd(), "bybitKey.txt")
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            lines = [ln.strip() for ln in f.readlines() if ln.strip()]
-        if len(lines) >= 2:
-            return lines[0], lines[1]
-    raise SystemExit(
-        "Missing API credentials. Set BYBIT_API_KEY/BYBIT_API_SECRET or provide bybitKey.txt with two lines."
-    )
 
 
-
-api_key, api_secret = load_keys()
+api_key, api_secret = utils.load_keys()
 
 def setup_logger(level: str):
     pass
@@ -583,6 +568,20 @@ async def place_future_order(sym,vibelevel):
     except Exception as e:
         logger.opt(exception=True).warning(f"Place order failed: {e}")
 
+async def place_future_order_no_dup(sym,vibelevel):
+    prodetail= await get_position_profit(api_key,api_secret, testnet=False)
+    logger.info(f'before sym:{sym}current position detail: {prodetail}')
+    if prodetail:
+        profit,detail =prodetail
+        pnldetail = {item['symbol']:float(item['unrealisedPnl']) for item in detail}
+        for k,v in pnldetail.items():
+            holdingsym = k[:-4]
+            if holdingsym.upper() == sym.upper():
+                msg=f'检测到已有持仓，无法重复下单，当前持仓币种{holdingsym}，未实现盈亏 {v:.2f} USD\n\n'
+                logger.info(msg)
+                await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
+                return 
+    return await place_future_order(sym,vibelevel)
 
 async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, refresh_minutes: int, log_level: str, cooldown_minutes: int):
     setup_logger(log_level or os.getenv("APH_LOG_LEVEL", "INFO"))
@@ -645,17 +644,18 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
             if tick_start-report_pnl_time>3600*8:
                 report_pnl_time=tick_start
-                prodetail= await get_position_profit(api_key,api_secret, testnet=False)
-                if prodetail:
-                    profit,detail =prodetail
-                    pnldetail = {item['symbol']:float(item['unrealisedPnl']) for item in detail}
-                    msg=f'总利润：{profit:.2f}\n\n'
-                    msg +=f'仓位明细：\n'
-                    for k,v in pnldetail.items():
-                        msg +=f'{k[:-4]}：{v:.2f} USD\n'
-                    msg +=f'\n\n{utils.time_to_string(time.time())}'
-                    print(msg)
-                    await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
+                await toppump.report_pos_pnl()
+                # prodetail= await get_position_profit(api_key,api_secret, testnet=False)
+                # if prodetail:
+                #     profit,detail =prodetail
+                #     pnldetail = {item['symbol']:float(item['unrealisedPnl']) for item in detail}
+                #     msg=f'总利润：{profit:.2f}\n\n'
+                #     msg +=f'仓位明细：\n'
+                #     for k,v in pnldetail.items():
+                #         msg +=f'{k[:-4]}：{v:.2f} USD\n'
+                #     msg +=f'\n\n{utils.time_to_string(time.time())}'
+                #     print(msg)
+                #     await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
 
             try:
                 # optional refresh of universe
@@ -769,7 +769,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             maxprice = max(high)
                             diffper = (maxprice-minprice)/minprice
                             if diffper<0.1:
-                                logger.warning(f'误报，没有这么多的波动价格 minprice {minprice} -> maxprice {maxprice}')
+                                logger.warning(f'误报 {sym}，没有这么多的波动价格 minprice {minprice} -> maxprice {maxprice}')
 
                             volUSDlist = [float(k[7]) for k in volumndata]
                             vollist = [utils.format_big_number(float(k[7])) for k in volumndata]
@@ -800,9 +800,9 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                     goodvibe="能量一般"
                                     goodvibeLevel=1
 
-                            if max(volUSDlist)<100*10000:
+                            if max(volUSDlist[-5:])<100*10000:
                                 goodvibe="能量很差，可能误报"
-                                logger.warning(f'能量很差，可能误报 {volUSDlist}')
+                                logger.warning(f'sym:{sym} 能量很差，可能误报 {volUSDlist}')
                                 continue
                         
 
@@ -814,7 +814,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
                             order = orderlist.get(sym)
                             if not order:
-                                placeorder = await place_future_order(sym,goodvibeLevel)
+                                placeorder = await place_future_order_no_dup(sym,goodvibeLevel)
                                 if placeorder:
                                     logger.info(f'succ place order 【{sym}】 goodvibeLevel {goodvibeLevel}')
                                     orderlist[sym]={"placetime":int(time.time()),
@@ -837,7 +837,12 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 msg += f'\n{goodvibe}\n\n'
                             
                             if takervol:
-                                msg += f'买入情绪列表:\n{takervol}\n\n'
+                                msg += f'买入情绪列表:\n{takervol}\n'
+                                last3 = takervol[-4:-1]
+                                if max(last3)<0.49:
+                                    msg += f'买入情绪较差，可能误报\n'
+                                msg += '\n'
+                                    
                             
                         msg += f'10分钟涨幅:{change:.2f}%\n'
 
@@ -890,6 +895,27 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             elapsed=now-history[0][0]
                             msg +=f'距离第一次提示已经过去了{utils.format_day_hour_minute(elapsed)}\n'
                             msg +=f'距离第一次提示价格 涨幅 【{priceperc:.2f}%】\n'
+
+                        fundinghist=await utils.get_funding_rate_history(sym)
+                        realtime_fundingdata = await utils.get_realtime_funding_rate(sym)
+                        realTimeFundingRate=None
+                        if realtime_fundingdata and realtime_fundingdata.get('lastFundingRate'):
+                            realTimeFundingRate = float(realtime_fundingdata.get('lastFundingRate',0.0))*100
+
+
+                        logger.info(f'最近 sym:{sym} funding rate历史：error msg {fundinghist.get('message','无数据')}') 
+                        fundingdata = fundinghist.get('data',[])
+                        if fundingdata:
+                            msg=msg+f'\n最近三次资金费率记录:\n'
+                            if realTimeFundingRate is not None:
+                                msg = msg+f'实时资金费率: {realTimeFundingRate:.2f}%\n'
+                            latestfunding = fundingdata[:3]
+                            for item in latestfunding:
+                                frate = float(item.get('lastFundingRate',0.0))*100
+                                ftime = item.get('calcTime','')
+                                fundingIntervalHours= item.get('fundingIntervalHours',8)
+                                ftimestr = utils.time_to_string(ftime/1000) if isinstance(ftime,(int,float)) else ftime
+                                msg = msg+f"{frate:.2f}% 时间:{ftimestr}({fundingIntervalHours}h)\n"
 
                         print(msg)
                         await send_notification_async(alpha_hunter_group, msg, title="Alpha PumpHunter Alert\n")

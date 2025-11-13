@@ -167,3 +167,52 @@ async def get_alpha_tokens():
         return None
     
     
+
+async def get_funding_rate_history(symbol):
+    
+    symbol = symbol.upper()
+    
+    url = f'https://www.binance.com/bapi/futures/v1/public/future/common/get-funding-rate-history'
+    headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
+    'Connection': 'keep-alive',
+}
+    if not symbol.endswith('USDT'):
+        symbol = symbol+"USDT"
+    jsondata = {"symbol":symbol,"page":1,"rows":20}
+    try:
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(url, headers=headers,json=jsondata)
+            r.raise_for_status()
+            js = r.json()
+            return js
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Failed to get_funding_rate_history {symbol}: {e}")
+        return None
+            
+
+async def get_realtime_funding_rate(symbol):
+    
+    symbol = symbol.upper()
+    
+    
+    headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
+    'Connection': 'keep-alive',
+}
+    if not symbol.endswith('USDT'):
+        symbol = symbol+"USDT"
+    try:
+        url = f'https://www.binance.com/fapi/v1/premiumIndex?symbol={symbol}'
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            js = r.json() #{"symbol":"PARTIUSDT","markPrice":"0.07933000","indexPrice":"0.08143554","estimatedSettlePrice":"0.08297042","lastFundingRate":"-0.00911850","interestRate":"0.00010000","nextFundingTime":1762934400000,"time":1762932881003}
+            return js
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Failed to get_realtime_funding_rate {symbol}: {e}")
+        return None
+            

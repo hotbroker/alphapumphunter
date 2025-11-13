@@ -402,7 +402,8 @@ async def report_history_ranked(history_ranked,alphalist):
                 change = item.get("priceChangePercent")
                 logger.info(f"{symbol}: {change}%")
                 repportmsg += f'币安合约24h涨幅榜: {symbol[:-4]}: {change}%\n'
-
+        else:
+            logger.info("Failed to fetch Binance futures data.")
         print(repportmsg)
         await send_notification_async(alpha_hunter_group, repportmsg, title="Alpha PumpHunter Alert\n")
 
@@ -668,18 +669,6 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
             if tick_start-report_pnl_time>3600*8:
                 report_pnl_time=tick_start
                 await toppump.report_pos_pnl()
-                # prodetail= await get_position_profit(api_key,api_secret, testnet=False)
-                # if prodetail:
-                #     profit,detail =prodetail
-                #     pnldetail = {item['symbol']:float(item['unrealisedPnl']) for item in detail}
-                #     msg=f'总利润：{profit:.2f}\n\n'
-                #     msg +=f'仓位明细：\n'
-                #     for k,v in pnldetail.items():
-                #         msg +=f'{k[:-4]}：{v:.2f} USD\n'
-                #     msg +=f'\n\n{utils.time_to_string(time.time())}'
-                #     print(msg)
-                #     await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
-
             try:
                 # optional refresh of universe
                 if tick_start >= next_refresh:

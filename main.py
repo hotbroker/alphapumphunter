@@ -782,6 +782,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             diffper = (maxprice-minprice)/minprice
                             if diffper*100<change:
                                 logger.warning(f'误报 {sym}，没有这么多的波动价格 minprice {minprice} -> maxprice {maxprice}')
+                                continue
 
                             volUSDlist = [float(k[7]) for k in volumndata]
                             vollist = [utils.format_big_number(float(k[7])) for k in volumndata]

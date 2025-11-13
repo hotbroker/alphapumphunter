@@ -390,6 +390,19 @@ async def report_history_ranked(history_ranked,alphalist):
                     fired="🔥"
                 repportmsg += f'{cnt}）{sym} {perc:.2f}%   ({priceperc:.2f}%){fired}\n\n'
         repportmsg += f'\n\n总计{len(sorted_pumplog)}个币种在过去5天内被提示过\n\n'
+
+        bnfutures = await toppump.fetch_binance_futures_24h()
+        if bnfutures:
+            #sort by priceChangePercent
+            sorted_bnfutures = sorted(bnfutures, key=lambda x: float(x.get("priceChangePercent", 0)), reverse=True)
+            logger.info(f'top 5 binance futures by 24h change:')
+            sorted_bnfutures = [item for item in sorted_bnfutures if time.time()-float(item.get("closeTime",0))/1000<3600]
+            for item in sorted_bnfutures[:5]:
+                symbol = item.get("symbol")
+                change = item.get("priceChangePercent")
+                logger.info(f"{symbol}: {change}%")
+                repportmsg += f'币安合约24h涨幅榜: {symbol[:-4]}: {change}%\n'
+
         print(repportmsg)
         await send_notification_async(alpha_hunter_group, repportmsg, title="Alpha PumpHunter Alert\n")
 
@@ -631,6 +644,16 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         # profit,detail = await get_position_profit(api_key,api_secret, testnet=False)
         # pnldetail = {item['symbol']:item['unrealisedPnl'] for item in detail}
         # print(f'profit :{profit}, pnldetail {pnldetail}')
+        bnfutures = await toppump.fetch_binance_futures_24h()
+        if bnfutures:
+            #sort by priceChangePercent
+            sorted_bnfutures = sorted(bnfutures, key=lambda x: float(x.get("priceChangePercent", 0)), reverse=True)
+            logger.info(f'top 5 binance futures by 24h change:')
+            sorted_bnfutures = [item for item in sorted_bnfutures if time.time()-float(item.get("closeTime",0))/1000<3600]
+            for item in sorted_bnfutures[:5]:
+                symbol = item.get("symbol")
+                change = item.get("priceChangePercent")
+                logger.info(f"{symbol[:-4]}: {change}%")
 
         time.sleep(2)
         report_pnl_time=0
@@ -768,7 +791,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             minprice = min(lowlist)
                             maxprice = max(high)
                             diffper = (maxprice-minprice)/minprice
-                            if diffper<0.1:
+                            if diffper*100<change:
                                 logger.warning(f'误报 {sym}，没有这么多的波动价格 minprice {minprice} -> maxprice {maxprice}')
 
                             volUSDlist = [float(k[7]) for k in volumndata]

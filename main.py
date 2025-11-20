@@ -26,7 +26,8 @@ logger.info(f'start with file {os.path.basename(os.path.abspath(__file__))} pid 
 
 alpha_hunter_group='53806935982@chatroom'
 MARKETWEBB_AGGREGATE = "https://www.marketwebb.co/bapi/defi/v1/public/alpha-trade/aggTicker24"
-MARKETWEBB_FAPI_OI = "https://www.marketwebb.co/fapi/v1/openInterest"
+MARKETWEBB_FAPI_OI = "https://www.marketwebb.co/fapi/v1/openInterest"#好像后来取消了 2025-11-20
+MARKETWEBB_FAPI_OI = "https://www.binance.com/fapi/v1/openInterest" 
 MARKETWEBB_SPOT_AGGTRADES = "https://www.marketwebb.co/api/v3/aggTrades"
 
 # Hardcoded MarketWebb headers (as provided by user)
@@ -61,6 +62,13 @@ async def send_notification_async(
     endpoint: str='http://gossiphere.com:9999/cmd',
     timeout_sec: float = 10.0,
 ) -> None:
+
+    if touser=='veryverybad':
+        await utils.send_notification_feishu_async(utils.feishu_myself, content, title)
+    else:
+        await utils.send_notification_feishu_async(utils.feishu_alpha,content, title)
+
+
     payload = {
         "cmd": "sendtext",
         "touser": touser,
@@ -150,10 +158,8 @@ class FapiChecker:
                 if isinstance(js, dict) and ("openInterest" in js or "symbol" in js):
                     self._cache[symbol] = True
                     return True
-                # Fallback: status 2xx without error code likely valid
-                ok = r.status_code // 100 == 2
-                self._cache[symbol] = ok
-                return ok
+        
+                return False
             except Exception:
                 self._cache[symbol] = False
                 return False
@@ -852,8 +858,9 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             if takervol:
                                 msg += f'买入情绪列表:\n{takervol}\n'
                                 last3 = takervol[-4:-1]
-                                if max(last3)<0.49:
-                                    msg += f'买入情绪较差，可能误报\n'
+                                last3Min045 = [x for x in last3 if x<0.46]
+                                if max(last3)<0.49 or len(last3Min045)>1:
+                                    msg += f'买入情绪较差,谨慎买入\n'
                                 msg += '\n'
                                     
                             

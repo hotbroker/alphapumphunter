@@ -2,6 +2,8 @@ from loguru import logger
 import httpx
 import os,json
 from typing import Deque, Dict, Iterable, List, MutableMapping, Optional, Set, Tuple
+feishu_myself = 'https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9'
+feishu_alpha = 'https://open.feishu.cn/open-apis/bot/v2/hook/0e014c3c-3891-4b65-b869-9a5aae2b1828'
 
 def format_big_number(num):
     num = float(num)
@@ -216,3 +218,24 @@ async def get_realtime_funding_rate(symbol):
         logger.opt(exception=True).warning(f"Failed to get_realtime_funding_rate {symbol}: {e}")
         return None
             
+
+async def send_notification_feishu_async(
+    touser: str,
+    content: str,
+    title: str = "TopPump Alert",
+    endpoint: str = 'http://gossiphere.com:9999/cmd',
+    timeout_sec: float = 10.0,
+) -> None:
+
+    return 
+    try:
+        feishudata = {"msg_type":"text","content":{"text":f"{title}\n{content}"}}
+        feishuurl = f'https://open.feishu.cn/open-apis/bot/v2/hook/{touser}'
+        if touser.startswith('http'):
+            feishuurl = touser
+        print(f'sending {feishuurl}')
+        async with httpx.AsyncClient(timeout=timeout_sec) as client:
+            r = await client.post(feishuurl, json=feishudata)
+            logger.debug(f"notify status={r.status_code} body={r.text[:200]}")
+    except Exception as e:
+        logger.warning(f"notify failed: {e}")

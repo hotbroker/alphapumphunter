@@ -97,7 +97,9 @@ async def place_future_order_no_dup(sym,vibelevel):
             if holdingsym.upper() == sym.upper():
                 msg=f'检测到已有持仓，无法重复下单，当前持仓币种{holdingsym}，未实现盈亏 {v:.2f} USD\n\n'
                 logger.info(msg)
-                await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
+                #await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
+                await utils.send_notification_feishu_async('https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9', 
+                msg,title="bybit 自动下单合约\n\n")
                 return 
     return await place_future_order(sym,vibelevel)
 
@@ -109,6 +111,12 @@ async def send_notification_async(
     endpoint: str = 'http://gossiphere.com:9999/cmd',
     timeout_sec: float = 10.0,
 ) -> None:
+    
+    if touser=='veryverybad':
+        await utils.send_notification_feishu_async(utils.feishu_myself, content, title)
+    else:
+        await utils.send_notification_feishu_async(utils.feishu_alpha,content, title)
+
     payload = {
         "cmd": "sendtext",
         "touser": touser,
@@ -145,7 +153,9 @@ async def report_pos_pnl():
             msg +=f'{id+1}){symbol}：{positionValue:.2f} USD({unrealisedPnl:.2f} USD)\n'
         msg +=f'\n\n{utils.time_to_string(time.time())}'
         print(msg)
-        await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")  
+        #await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")  
+        await utils.send_notification_feishu_async('https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9',
+                msg,title="bybit 自动下单合约\n\n")
 
 @dataclass
 class PricePoint:
@@ -596,6 +606,7 @@ async def cmd_run_simple(
                             res = await place_future_order_no_dup(sym,energy_level)
                             success = res is not None
                             await send_notification_async('veryverybad', f'下单 {_base_from_symbol(sym)} energy_level {energy_level}\n结果：{success}', title="bybit 自动下单合约\n\n")  
+                            
                             await report_pos_pnl()
 
                             qv = _to_float(r, "quoteVolume")
@@ -619,7 +630,8 @@ async def cmd_run_simple(
                             msg.append(f"15m成交额列:{[format_big_number(x) for x in vol_last5]}")
                             msg.append(f"买入情绪:{_format_buy_ratio(ratios)}")
                             last3 = ratios[-4:-1]
-                            if max(last3)<0.49:
+                            last3Min045 = [x for x in last3 if x<0.46]
+                            if max(last3)<0.49 or len(last3Min045)>1:
                                 msg.append(f'卖出情绪较重，留意行情\n')
                                 
 

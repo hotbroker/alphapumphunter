@@ -1,12 +1,13 @@
 import requests
 import time
 from datetime import datetime
+import utils
 
 def get_top_volume_tickers(limit_volume=50000000):
     """
     Fetch 24hr ticker data and return symbols with quote volume > limit_volume (USDT).
     """
-    url = "https://www.binance.com/fapi/v1/ticker/24hr"
+    url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
@@ -32,7 +33,7 @@ def get_klines(symbol, interval='15m', limit=100):
     """
     Fetch klines for a symbol.
     """
-    url = "https://www.binance.com/fapi/v1/klines"
+    url = "https://fapi.binance.com/fapi/v1/klines"
     params = {
         'symbol': symbol,
         'interval': interval,
@@ -46,10 +47,36 @@ def get_klines(symbol, interval='15m', limit=100):
         print(f"Error fetching klines for {symbol}: {e}")
         return []
 
-def analyze_klines(symbol, klines, current_time_ms=None):
+def get_open_interest(symbol, period, start_time=None, end_time=None, limit=1):
+    """
+    Fetch Open Interest History.
+    """
+    url = "https://fapi.binance.com/futures/data/openInterestHist"
+    params = {
+        'symbol': symbol,
+        'period': period,
+        'limit': limit
+    }
+    if start_time:
+        params['startTime'] = start_time
+    if end_time:
+        params['endTime'] = end_time
+        
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error fetching OI for {symbol}: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Response: {e.response.text}")
+        return []
+
+def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=20000000):
     """
     Analyze klines for the pattern.
     current_time_ms: The 'now' time to compare against. If None, uses system time.
+    volume_threshold: The volume threshold to check against (default 20,000,000).
     """
     if not klines or len(klines) < 50:
         return
@@ -61,7 +88,6 @@ def analyze_klines(symbol, klines, current_time_ms=None):
             'open_time': int(k[0]),
             'open': float(k[1]),
             'close': float(k[4]),
-            'volume_base': float(k[5]), # Base asset volume
             'volume_quote': float(k[7]), # Quote asset volume
             'close_time': int(k[6])
         })
@@ -73,36 +99,16 @@ def analyze_klines(symbol, klines, current_time_ms=None):
     if not complete_klines:
         return
 
-    # Find the candle with the maximum volume (check both base and quote?)
-    # Usually we want the "biggest" candle. 
-    # Let's find max by Quote Volume first as primary.
+    # Find the candle with the maximum volume (Quote Volume only)
     max_vol_candle = max(complete_klines, key=lambda x: x['volume_quote'])
     max_vol_index = complete_klines.index(max_vol_candle)
     t1 = max_vol_candle
+    t1_vol = t1['volume_quote']
 
-    # Determine which volume metric to use
-    use_base_volume = False
-    if t1['volume_quote'] > 20000000:
-        vol_metric = 'volume_quote'
-        limit = 20000000
-    elif t1['volume_base'] > 20000000:
-        # Check if max by base volume is the same candle?
-        # It might be different. Let's re-find max by base volume if quote failed.
-        max_vol_candle_base = max(complete_klines, key=lambda x: x['volume_base'])
-        if max_vol_candle_base['volume_base'] > 20000000:
-            t1 = max_vol_candle_base
-            max_vol_index = complete_klines.index(t1)
-            vol_metric = 'volume_base'
-            limit = 20000000
-            use_base_volume = True
-        else:
-             # print(f"Debug {symbol}: Max Vol (Quote) {t1['volume_quote']:,.2f} < 20M. Max Vol (Base) {max_vol_candle_base['volume_base']:,.2f} < 20M")
-             return
-    else:
-        # print(f"Debug {symbol}: Max Vol (Quote) {t1['volume_quote']:,.2f} < 20M")
+    # Condition 1: t1 Volume > volume_threshold
+    if t1_vol <= volume_threshold:
+        # print(f"Debug {symbol}: Max Vol (Quote) {t1_vol:,.2f} < {volume_threshold:,.2f}")
         return
-
-    t1_vol = t1[vol_metric]
 
     # Condition 2: t1 is a positive candle (Close > Open)
     if t1['close'] <= t1['open']:
@@ -121,15 +127,15 @@ def analyze_klines(symbol, klines, current_time_ms=None):
     threshold = 0.1 * t1_vol
     
     for candle in quiet_period_candles:
-        if candle[vol_metric] > threshold:
-            # print(f"Debug {symbol}: Quiet period failed. Vol {candle[vol_metric]} > {threshold}")
+        if candle['volume_quote'] > threshold:
+            # print(f"Debug {symbol}: Quiet period failed. Vol {candle['volume_quote']} > {threshold}")
             return
 
     # Condition 4: Time elapsed > 20 * 15 minutes
     distance = (len(complete_klines) - 1) - max_vol_index
     
-    if distance <= 20:
-        # print(f"Debug {symbol}: Distance {distance} <= 20")
+    if distance < 20:
+        print(f"Debug {symbol}: Distance {distance} <= 20")
         return
 
     # Condition 5: Current price > t0 Open
@@ -139,23 +145,74 @@ def analyze_klines(symbol, klines, current_time_ms=None):
     t0 = complete_klines[t0_index]
     
     if current_price <= t0['open']:
-        # print(f"Debug {symbol}: Price {current_price} <= t0 open {t0['open']}")
+        print(f"Debug {symbol}: Price {current_price} <= t0 open {t0['open']}")
+        return
+
+    # Condition 6: Current OI > 90% of t1+1 OI
+    # We want the OI at the end of t1 (which is the start of t1+1) or during t1+1?
+    # User said: "need to take t1+1 OI as benchmark, currently it seems we need t1 time to finish, OI data appears in next 15m candle"
+    # So we want the OI associated with the candle AFTER t1.
+    # t1 is at `max_vol_index`.
+    # t1+1 is at `max_vol_index + 1`.
+    # We should check if t1+1 exists in our history.
+    
+    t1_plus_1_index = max_vol_index + 1
+    if t1_plus_1_index >= len(complete_klines):
+        # t1 is the last complete candle?
+        # But we require distance > 20, so t1+1 definitely exists in complete_klines.
+        print(f"Debug {symbol}: t1+1 index out of bounds (should not happen due to distance check)")
+        return
+
+    t1_plus_1 = complete_klines[t1_plus_1_index]
+    
+    # Fetch OI for t1+1
+    # We want the OI recorded at t1_plus_1['open_time']? Or close_time?
+    # Usually OI is a snapshot.
+    # If we want the OI *of* that candle, we can query by time range.
+    # Let's query the 15m period of t1+1.
+    
+    print(f"Debug {symbol}: Fetching OI for t1+1")
+    t1_p1_oi_data = get_open_interest(symbol, '15m', start_time=t1_plus_1['open_time'], end_time=t1_plus_1['close_time'], limit=1)
+    if not t1_p1_oi_data:
+        print(f"Debug {symbol}: Could not fetch OI for t1+1")
+        return
+    
+    t1_p1_oi = float(t1_p1_oi_data[0]['sumOpenInterest'])
+    t1_p1_oi_value = float(t1_p1_oi_data[0]['sumOpenInterestValue'])
+    
+    # Fetch Current OI
+    current_oi = 0
+    if current_time_ms:
+        current_oi_data = get_open_interest(symbol, '15m', start_time=current_time_ms - 15*60*1000, end_time=current_time_ms, limit=1)
+    else:
+        current_oi_data = get_open_interest(symbol, '15m', limit=1)
+        
+    if not current_oi_data:
+        print(f"Debug {symbol}: Could not fetch Current OI")
+        return
+
+    current_oi = float(current_oi_data[-1]['sumOpenInterest'])
+    current_oi_value = float(current_oi_data[-1]['sumOpenInterestValue'])
+    
+    if current_oi <= 0.9 * t1_p1_oi:
+        print(f"Debug {symbol}: Current OI {current_oi} <= 90% of t1+1 OI {t1_p1_oi}")
         return
 
     # If all conditions met, output alert
     t1_time_str = datetime.fromtimestamp(t1['open_time'] / 1000).strftime('%Y-%m-%d %H:%M:%S')
     print(f"ALERT: {symbol} found!")
     print(f"  t1 Time: {t1_time_str}")
-    print(f"  t1 Volume ({vol_metric}): {t1_vol:,.2f}")
+    print(f"  t1 Volume (Quote): {t1_vol:,.2f} ({utils.format_big_number(t1_vol)} usdt)")
     print(f"  Current Price: {current_price}")
-    print(f"  t0 Open: {t0['open']}")
+    print(f"  t1+1 OI: {t1_p1_oi:,.2f} ({utils.format_big_number(t1_p1_oi_value)} usdt)")
+    print(f"  Current OI: {current_oi:,.2f} ({utils.format_big_number(current_oi_value)} usdt)")
     print("-" * 30)
 
-def analyze_symbol(symbol):
+def analyze_symbol(symbol, volume_threshold=20000000):
     klines = get_klines(symbol, limit=500)
-    analyze_klines(symbol, klines)
+    analyze_klines(symbol, klines, volume_threshold=volume_threshold)
 
-def simulate_check(symbol, target_time_str):
+def simulate_check(symbol, target_time_str, volume_threshold=20000000):
     """
     Simulate check for a symbol at a specific Beijing Time.
     Format: 'YYYY-MM-DD HH:MM:SS'
@@ -170,7 +227,7 @@ def simulate_check(symbol, target_time_str):
     # Fetch klines ending at this time
     # We need enough history. limit=100 is fine.
     # endTime should be the target time.
-    url = "https://www.binance.com/fapi/v1/klines"
+    url = "https://fapi.binance.com/fapi/v1/klines"
     params = {
         'symbol': symbol,
         'interval': '15m',
@@ -191,14 +248,13 @@ def simulate_check(symbol, target_time_str):
             last_time_str = datetime.fromtimestamp(last_close_time / 1000).strftime('%Y-%m-%d %H:%M:%S')
             # print(f"Fetched data ending at: {last_time_str} (Local)")
             
-        analyze_klines(symbol, klines, current_time_ms=timestamp_ms)
+        analyze_klines(symbol, klines, current_time_ms=timestamp_ms, volume_threshold=volume_threshold)
         
     except Exception as e:
         print(f"Error simulating {symbol}: {e}")
 
 def main():
     print("Starting Binance Futures Monitor...")
-    print("Fetching tickers with 24h volume > 50,000,000 USDT...")
     tickers = get_top_volume_tickers()
     print(f"Found {len(tickers)} tickers to check.")
     
@@ -208,7 +264,7 @@ def main():
             time.sleep(0.5)
         
         print(f"Checking {symbol}...", end='\r')
-        analyze_symbol(symbol)
+        analyze_symbol(symbol,1000*10000)
     
     print("\nScan complete.")
 

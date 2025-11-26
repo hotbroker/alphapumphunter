@@ -185,7 +185,12 @@ def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=200000
     if current_price <= t0['open']:
         logger.debug(f"Debug {symbol}: Price {current_price} <= t0 open {t0['open']}")
         return
-
+    # 【新增建议】防止过度追高，但允许强势横盘
+    # 允许当前价格比 t1 收盘价高，但不能超过 3% - 5%
+    # 如果超过太多，说明已经飞走了，这时候追进去盈亏比不划算
+    if current_price > t1['close'] * 1.05: 
+        logger.debug(f"Debug {symbol}: Price extended too far ({current_price} > 1.05 * {t1['close']})")
+        return
     # Condition 6: Current OI > 90% of t1+1 OI
     
     t1_plus_1_index = max_vol_index + 1

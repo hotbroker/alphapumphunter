@@ -3,7 +3,7 @@ import time
 from datetime import datetime
 import utils
 import asyncio
-
+import json
 import os
 from datetime import datetime, timedelta
 from loguru import logger
@@ -14,6 +14,23 @@ if __name__ == "__main__":
 logger.info(f'start with file {os.path.basename(os.path.abspath(__file__))} pid {os.getpid()}@ filetime {datetime.fromtimestamp(os.path.getctime(os.path.abspath(__file__))).strftime("%Y-%m-%d, %H:%M:%S")}')
 
 alpha_hunter_group='53806935982@chatroom'
+HISTORY_FILE = "monitor_alert_history.json"
+
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to load history: {e}")
+    return {}
+
+def save_history(history):
+    try:
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(history, f, indent=2)
+    except Exception as e:
+        logger.error(f"Failed to save history: {e}")
 
 def get_top_volume_tickers(limit_volume=50000000):
     """
@@ -56,7 +73,7 @@ def get_klines(symbol, interval='15m', limit=100):
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        logger.error(f"Error fetching klines for {symbol}: {e}")
+        logger.opt(exception=True).error(f"Error fetching klines for {symbol}")
         return []
 
 def get_open_interest(symbol, period, start_time=None, end_time=None, limit=1):
@@ -79,9 +96,7 @@ def get_open_interest(symbol, period, start_time=None, end_time=None, limit=1):
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        logger.error(f"Error fetching OI for {symbol}: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            logger.error(f"Response: {e.response.text}")
+        logger.opt(exception=True).error(f"Error fetching OI for {symbol}")
         return []
 
 def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=20000000):
@@ -90,6 +105,17 @@ def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=200000
     current_time_ms: The 'now' time to compare against. If None, uses system time.
     volume_threshold: The volume threshold to check against (default 20,000,000).
     """
+    # Load history
+    history = load_history()
+    
+    # Check cooldown
+    if symbol in history:
+        last_alert_time = history[symbol].get('last_alert_time', 0)
+        # 3 days in seconds = 3 * 24 * 3600 = 259200
+        if time.time() - last_alert_time < 3 * 24 * 3600:
+            # logger.debug(f"{symbol} is in cooldown.")
+            return
+
     if not klines or len(klines) < 50:
         return
 
@@ -119,12 +145,12 @@ def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=200000
 
     # Condition 1: t1 Volume > volume_threshold
     if t1_vol <= volume_threshold:
-        # print(f"Debug {symbol}: Max Vol (Quote) {t1_vol:,.2f} < {volume_threshold:,.2f}")
+        # logger.debug(f"Debug {symbol}: Max Vol (Quote) {t1_vol:,.2f} < {volume_threshold:,.2f}")
         return
 
     # Condition 2: t1 is a positive candle (Close > Open)
     if t1['close'] <= t1['open']:
-        # print(f"Debug {symbol}: Max Vol candle is not positive")
+        # logger.debug(f"Debug {symbol}: Max Vol candle is not positive")
         return
 
     # Condition 3: Quiet period [-10:-3]
@@ -132,7 +158,7 @@ def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=200000
     end_idx = max_vol_index - 3
     
     if start_idx < 0:
-        # print(f"Debug {symbol}: Not enough history for quiet period. Max Vol Index: {max_vol_index}")
+        # logger.debug(f"Debug {symbol}: Not enough history for quiet period. Max Vol Index: {max_vol_index}")
         return
 
     quiet_period_candles = complete_klines[start_idx:end_idx]
@@ -140,7 +166,7 @@ def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=200000
     
     for candle in quiet_period_candles:
         if candle['volume_quote'] > threshold:
-            # print(f"Debug {symbol}: Quiet period failed. Vol {candle['volume_quote']} > {threshold}")
+            # logger.debug(f"Debug {symbol}: Quiet period failed. Vol {candle['volume_quote']} > {threshold}")
             return
 
     # Condition 4: Time elapsed > 20 * 15 minutes
@@ -161,28 +187,15 @@ def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=200000
         return
 
     # Condition 6: Current OI > 90% of t1+1 OI
-    # We want the OI at the end of t1 (which is the start of t1+1) or during t1+1?
-    # User said: "need to take t1+1 OI as benchmark, currently it seems we need t1 time to finish, OI data appears in next 15m candle"
-    # So we want the OI associated with the candle AFTER t1.
-    # t1 is at `max_vol_index`.
-    # t1+1 is at `max_vol_index + 1`.
-    # We should check if t1+1 exists in our history.
     
     t1_plus_1_index = max_vol_index + 1
     if t1_plus_1_index >= len(complete_klines):
-        # t1 is the last complete candle?
-        # But we require distance > 20, so t1+1 definitely exists in complete_klines.
         logger.debug(f"Debug {symbol}: t1+1 index out of bounds (should not happen due to distance check)")
         return
 
     t1_plus_1 = complete_klines[t1_plus_1_index]
     
     # Fetch OI for t1+1
-    # We want the OI recorded at t1_plus_1['open_time']? Or close_time?
-    # Usually OI is a snapshot.
-    # If we want the OI *of* that candle, we can query by time range.
-    # Let's query the 15m period of t1+1.
-    
     logger.debug(f"Debug {symbol}: Fetching OI for t1+1")
     t1_p1_oi_data = get_open_interest(symbol, '15m', start_time=t1_plus_1['open_time'], end_time=t1_plus_1['close_time'], limit=1)
     if not t1_p1_oi_data:
@@ -229,9 +242,16 @@ def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=200000
         logger.error(f"Failed to send notification: {e}")
 
     print("-" * 30)
+    
+    # Update history
+    history[symbol] = {
+        'last_alert_time': time.time(),
+        't1_time': t1_time_str
+    }
+    save_history(history)
 
 def analyze_symbol(symbol, volume_threshold=20000000):
-    klines = get_klines(symbol, limit=500)
+    klines = get_klines(symbol, limit=200)
     analyze_klines(symbol, klines, volume_threshold=volume_threshold)
 
 def simulate_check(symbol, target_time_str, volume_threshold=20000000):
@@ -273,22 +293,30 @@ def simulate_check(symbol, target_time_str, volume_threshold=20000000):
         analyze_klines(symbol, klines, current_time_ms=timestamp_ms, volume_threshold=volume_threshold)
         
     except Exception as e:
-        logger.error(f"Error simulating {symbol}: {e}")
+        logger.opt(exception=True).error(f"Error simulating {symbol}")
 
 def main():
     logger.info("Starting Binance Futures Monitor...")
-    tickers = get_top_volume_tickers()
-    logger.info(f"Found {len(tickers)} tickers to check.")
     
-    for i, symbol in enumerate(tickers):
-        # Rate limit prevention (simple)
-        if i % 5 == 0:
-            time.sleep(0.5)
+    while True:
+        try:
+            logger.info("Starting new scan cycle...")
+            tickers = get_top_volume_tickers()
+            logger.info(f"Found {len(tickers)} tickers to check.")
+            
+            for i, symbol in enumerate(tickers):
+                # Rate limit prevention (simple)
+                if i % 5 == 0:
+                    time.sleep(0.5)
+                
+                print(f"Checking {symbol}...", end='\r')
+                analyze_symbol(symbol, 1000*10000)
         
-        print(f"Checking {symbol}...", end='\r')
-        analyze_symbol(symbol,1000*10000)
-    
-    logger.info("Scan complete.")
+            logger.info("Scan complete. Waiting 5 minutes...")
+            time.sleep(300)
+        except Exception as e:
+            logger.opt(exception=True).error("Error in main loop")
+            time.sleep(300)
 
 if __name__ == "__main__":
     main()

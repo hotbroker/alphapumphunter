@@ -228,6 +228,9 @@ async def send_notification_feishu_async(
 ) -> None:
 
     return 
+
+
+
     try:
         feishudata = {"msg_type":"text","content":{"text":f"{title}\n{content}"}}
         feishuurl = f'https://open.feishu.cn/open-apis/bot/v2/hook/{touser}'
@@ -236,6 +239,26 @@ async def send_notification_feishu_async(
         print(f'sending {feishuurl}')
         async with httpx.AsyncClient(timeout=timeout_sec) as client:
             r = await client.post(feishuurl, json=feishudata)
+            logger.debug(f"notify status={r.status_code} body={r.text[:200]}")
+    except Exception as e:
+        logger.warning(f"notify failed: {e}")
+
+async def send_notification_async(
+    touser: str,
+    content: str,
+    title: str = "TopPump Alert",
+    endpoint: str = 'http://gossiphere.com:9999/cmd',
+    timeout_sec: float = 10.0,
+) -> None:
+
+    payload = {
+        "cmd": "sendtext",
+        "touser": touser,
+        "msgcontent": f"{title}\n{content}",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=timeout_sec) as client:
+            r = await client.post(endpoint, json=payload)
             logger.debug(f"notify status={r.status_code} body={r.text[:200]}")
     except Exception as e:
         logger.warning(f"notify failed: {e}")

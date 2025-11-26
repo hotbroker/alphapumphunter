@@ -2,6 +2,18 @@ import requests
 import time
 from datetime import datetime
 import utils
+import asyncio
+
+import os
+from datetime import datetime, timedelta
+from loguru import logger
+
+if __name__ == "__main__":
+    logger.add("log{}.log".format(os.path.basename(os.path.abspath(__file__))), rotation="1 MB",retention="3 days",level="INFO")  # Rotate logs when they reach 1 MB
+
+logger.info(f'start with file {os.path.basename(os.path.abspath(__file__))} pid {os.getpid()}@ filetime {datetime.fromtimestamp(os.path.getctime(os.path.abspath(__file__))).strftime("%Y-%m-%d, %H:%M:%S")}')
+
+alpha_hunter_group='53806935982@chatroom'
 
 def get_top_volume_tickers(limit_volume=50000000):
     """
@@ -26,7 +38,7 @@ def get_top_volume_tickers(limit_volume=50000000):
         
         return tickers
     except Exception as e:
-        print(f"Error fetching tickers: {e}")
+        logger.error(f"Error fetching tickers: {e}")
         return []
 
 def get_klines(symbol, interval='15m', limit=100):
@@ -44,7 +56,7 @@ def get_klines(symbol, interval='15m', limit=100):
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        print(f"Error fetching klines for {symbol}: {e}")
+        logger.error(f"Error fetching klines for {symbol}: {e}")
         return []
 
 def get_open_interest(symbol, period, start_time=None, end_time=None, limit=1):
@@ -67,9 +79,9 @@ def get_open_interest(symbol, period, start_time=None, end_time=None, limit=1):
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        print(f"Error fetching OI for {symbol}: {e}")
+        logger.error(f"Error fetching OI for {symbol}: {e}")
         if hasattr(e, 'response') and e.response is not None:
-            print(f"Response: {e.response.text}")
+            logger.error(f"Response: {e.response.text}")
         return []
 
 def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=20000000):
@@ -135,7 +147,7 @@ def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=200000
     distance = (len(complete_klines) - 1) - max_vol_index
     
     if distance < 20:
-        print(f"Debug {symbol}: Distance {distance} <= 20")
+        logger.debug(f"Debug {symbol}: Distance {distance} <= 20")
         return
 
     # Condition 5: Current price > t0 Open
@@ -145,7 +157,7 @@ def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=200000
     t0 = complete_klines[t0_index]
     
     if current_price <= t0['open']:
-        print(f"Debug {symbol}: Price {current_price} <= t0 open {t0['open']}")
+        logger.debug(f"Debug {symbol}: Price {current_price} <= t0 open {t0['open']}")
         return
 
     # Condition 6: Current OI > 90% of t1+1 OI
@@ -160,7 +172,7 @@ def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=200000
     if t1_plus_1_index >= len(complete_klines):
         # t1 is the last complete candle?
         # But we require distance > 20, so t1+1 definitely exists in complete_klines.
-        print(f"Debug {symbol}: t1+1 index out of bounds (should not happen due to distance check)")
+        logger.debug(f"Debug {symbol}: t1+1 index out of bounds (should not happen due to distance check)")
         return
 
     t1_plus_1 = complete_klines[t1_plus_1_index]
@@ -171,10 +183,10 @@ def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=200000
     # If we want the OI *of* that candle, we can query by time range.
     # Let's query the 15m period of t1+1.
     
-    print(f"Debug {symbol}: Fetching OI for t1+1")
+    logger.debug(f"Debug {symbol}: Fetching OI for t1+1")
     t1_p1_oi_data = get_open_interest(symbol, '15m', start_time=t1_plus_1['open_time'], end_time=t1_plus_1['close_time'], limit=1)
     if not t1_p1_oi_data:
-        print(f"Debug {symbol}: Could not fetch OI for t1+1")
+        logger.debug(f"Debug {symbol}: Could not fetch OI for t1+1")
         return
     
     t1_p1_oi = float(t1_p1_oi_data[0]['sumOpenInterest'])
@@ -188,24 +200,34 @@ def analyze_klines(symbol, klines, current_time_ms=None, volume_threshold=200000
         current_oi_data = get_open_interest(symbol, '15m', limit=1)
         
     if not current_oi_data:
-        print(f"Debug {symbol}: Could not fetch Current OI")
+        logger.debug(f"Debug {symbol}: Could not fetch Current OI")
         return
 
     current_oi = float(current_oi_data[-1]['sumOpenInterest'])
     current_oi_value = float(current_oi_data[-1]['sumOpenInterestValue'])
     
     if current_oi <= 0.9 * t1_p1_oi:
-        print(f"Debug {symbol}: Current OI {current_oi} <= 90% of t1+1 OI {t1_p1_oi}")
+        logger.debug(f"Debug {symbol}: Current OI {current_oi} <= 90% of t1+1 OI {t1_p1_oi}")
         return
 
     # If all conditions met, output alert
     t1_time_str = datetime.fromtimestamp(t1['open_time'] / 1000).strftime('%Y-%m-%d %H:%M:%S')
-    print(f"ALERT: {symbol} found!")
-    print(f"  t1 Time: {t1_time_str}")
-    print(f"  t1 Volume (Quote): {t1_vol:,.2f} ({utils.format_big_number(t1_vol)} usdt)")
-    print(f"  Current Price: {current_price}")
-    print(f"  t1+1 OI: {t1_p1_oi:,.2f} ({utils.format_big_number(t1_p1_oi_value)} usdt)")
-    print(f"  Current OI: {current_oi:,.2f} ({utils.format_big_number(current_oi_value)} usdt)")
+    
+    alert_msg = f"符号: 【{symbol[:-4]}】\n"
+    alert_msg += f"当前价格: {current_price}\n"
+    alert_msg += f"起飞时间: {t1_time_str}\n"
+    alert_msg += f"起飞量: {t1_vol:,.2f} ({utils.format_big_number(t1_vol)} usdt)\n"
+    alert_msg += f"t1+1 OI: {t1_p1_oi:,.2f} ({utils.format_big_number(t1_p1_oi_value)} usdt)\n"
+    alert_msg += f"当前OI: {current_oi:,.2f} ({utils.format_big_number(current_oi_value)} usdt)\n"
+    
+    logger.info(alert_msg)
+    
+    # Send notification
+    try:
+        asyncio.run(utils.send_notification_async(alpha_hunter_group, alert_msg, title=f"起飞后未跌破的币种: {symbol[:-4]}"))
+    except Exception as e:
+        logger.error(f"Failed to send notification: {e}")
+
     print("-" * 30)
 
 def analyze_symbol(symbol, volume_threshold=20000000):
@@ -217,7 +239,7 @@ def simulate_check(symbol, target_time_str, volume_threshold=20000000):
     Simulate check for a symbol at a specific Beijing Time.
     Format: 'YYYY-MM-DD HH:MM:SS'
     """
-    print(f"Simulating {symbol} at {target_time_str} (Beijing Time)...")
+    logger.info(f"Simulating {symbol} at {target_time_str} (Beijing Time)...")
     
     # Convert Beijing Time (UTC+8) to Timestamp
     dt = datetime.strptime(target_time_str, '%Y-%m-%d %H:%M:%S')
@@ -239,7 +261,7 @@ def simulate_check(symbol, target_time_str, volume_threshold=20000000):
         response.raise_for_status()
         klines = response.json()
         if not klines:
-            print(f"No data found for {symbol}. Symbol might be invalid.")
+            logger.warning(f"No data found for {symbol}. Symbol might be invalid.")
             return
 
         # Debug: check the time of the last candle
@@ -251,12 +273,12 @@ def simulate_check(symbol, target_time_str, volume_threshold=20000000):
         analyze_klines(symbol, klines, current_time_ms=timestamp_ms, volume_threshold=volume_threshold)
         
     except Exception as e:
-        print(f"Error simulating {symbol}: {e}")
+        logger.error(f"Error simulating {symbol}: {e}")
 
 def main():
-    print("Starting Binance Futures Monitor...")
+    logger.info("Starting Binance Futures Monitor...")
     tickers = get_top_volume_tickers()
-    print(f"Found {len(tickers)} tickers to check.")
+    logger.info(f"Found {len(tickers)} tickers to check.")
     
     for i, symbol in enumerate(tickers):
         # Rate limit prevention (simple)
@@ -266,7 +288,7 @@ def main():
         print(f"Checking {symbol}...", end='\r')
         analyze_symbol(symbol,1000*10000)
     
-    print("\nScan complete.")
+    logger.info("Scan complete.")
 
 if __name__ == "__main__":
     main()

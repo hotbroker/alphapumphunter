@@ -728,7 +728,14 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         logger.warning(f'fail to get symbol for token_id {token_id}')
                         await asyncio.sleep(5)
                         continue
-
+                    if sym in bypass:
+                        print(f"Token {sym} in bypass list, skip alert")
+                        continue
+                    contractAddress = it.get("contractAddress","")
+                    if contractAddress:
+                        if contractAddress in bypass:
+                            print(f"Token {contractAddress} in bypass list, skip alert")
+                            continue
                     futureprice = await get_symbol_future_price(sym)
                     if futureprice:
                         futureprice = float(futureprice)

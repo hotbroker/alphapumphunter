@@ -733,7 +733,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         continue
                     contractAddress = it.get("contractAddress","")
                     if contractAddress:
-                        if contractAddress in bypass:
+                        if contractAddress.upper() in bypass:
                             print(f"Token {contractAddress} in bypass list, skip alert")
                             continue
                     futureprice = await get_symbol_future_price(sym)
@@ -743,7 +743,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         absdif = abs(dif)
                         absdifper = absdif/px
                         if absdifper>3:
-                            logger.error(f'price error for sym {sym} futureprice {futureprice} ,alpha price {px}')
+                            logger.error(f'price error for sym {sym} {contractAddress} futureprice {futureprice} ,alpha price {px}')
                             continue
 
 

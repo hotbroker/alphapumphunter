@@ -161,7 +161,7 @@ async def monitor_loop():
                 
                 logger.info(f"Found {len(new_symbols)} symbols listed after {TARGET_DATE}")
                 if len(new_symbols) <10:
-                    logger.info(new_symbols )
+                    logger.info([s["symbol"] for s in new_symbols])
                 
                 # 2. Update State & Backfill
                 for s in new_symbols:

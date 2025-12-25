@@ -534,8 +534,8 @@ async def cmd_run_simple(
     # await send_notification_async('veryverybad', f'下单 {sym} energy_level {energy_level}', title="bybit 自动下单合约\n\n")  
     await report_pos_pnl()
     fundinghist=await utils.get_funding_rate_history("LSK")
-    logger.info(f'最近LSK funding rate历史：error msg {fundinghist.get('message','无数据')}')
-    logger.info(f'最近LSK funding rate历史：{fundinghist.get('data',[])[:5]}')
+    logger.info(f"最近LSK funding rate历史：error msg {fundinghist.get('message','无数据')}")
+    logger.info(f"最近LSK funding rate历史：{fundinghist.get('data',[])[:5]}")
     fundingdata = fundinghist.get('data',[])
     latestfunding = fundingdata[:3]
     for item in latestfunding:
@@ -636,7 +636,7 @@ async def cmd_run_simple(
                                 
 
                             fundinghist=await utils.get_funding_rate_history(sym)
-                            logger.info(f'最近 sym:{sym} funding rate历史：error msg {fundinghist.get('message','无数据')}') 
+                            logger.info(f"最近 sym:{sym} funding rate历史：error msg {fundinghist.get('message','无数据')}") 
                             realtime_fundingdata = await utils.get_realtime_funding_rate(sym)
                             realTimeFundingRate=None
                             if realtime_fundingdata and realtime_fundingdata.get('lastFundingRate'):

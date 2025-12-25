@@ -7,7 +7,7 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Deque, Dict, Iterable, List, MutableMapping, Optional, Set, Tuple
+from typing import Deque, Dict, Iterable, List, MutableMapping, Optional, Set, Tuple,Any
 
 import httpx
 from loguru import logger
@@ -951,7 +951,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             realTimeFundingRate = float(realtime_fundingdata.get('lastFundingRate',0.0))*100
 
 
-                        logger.info(f'最近 sym:{sym} funding rate历史：error msg {fundinghist.get('message','无数据')}') 
+                        logger.info(f"最近 sym:{sym} funding rate历史：error msg {fundinghist.get('message','无数据')}") 
                         fundingdata = fundinghist.get('data',[])
                         if fundingdata:
                             msg=msg+f'\n最近三次资金费率记录:\n'

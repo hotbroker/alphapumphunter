@@ -262,3 +262,11 @@ async def send_notification_async(
             logger.debug(f"notify status={r.status_code} body={r.text[:200]}")
     except Exception as e:
         logger.warning(f"notify failed: {e}")
+
+
+def is_goodpump(buyvol, buyrate):
+    if len(buyrate) <4 or len(buyvol) <4:
+        return False
+    if max(buyvol[-4:])>500*10000 and max(buyrate[-4:])>0.56 and min(buyrate[-4:])>0.51:
+        return True
+    return False

@@ -272,10 +272,10 @@ async def compute_energy(symbol_usdt: str) -> Dict[str, Any]:
         return out
     price_change_pct = (priceseries[-1] - priceseries[0]) / priceseries[0] *100
     price_change_pct2 = (priceseries[-2] - priceseries[1]) / priceseries[1] *100
-    if price_change_pct <10.0:
+    if price_change_pct <9.0:
         out.update({
             "energy_level": 0,
-            "energy_note": "价格波动不足10%",
+            "energy_note": "价格波动不足9%",
             "vol_usd_list": [],
             "taker_buy_ratio": [],
         })
@@ -660,10 +660,13 @@ async def cmd_run_simple(
                             msg.append(f"时间:{time_to_string(now_ts)}")
                             content = "\n".join(msg)
                             logger.info(f"Sending alert notification for {sym}:\n{content}")
+                            title="补充其它币种提示\n"
+                            if utils.is_goodpump(vol_last5, ratios):
+                                title=f"补充其它币种提示 推荐：{_base_from_symbol(sym)}\n"
                             await send_notification_async(
                                 notify_to,
                                 content,
-                                title="补充其它币种提示\n",
+                                title=title,
                                 endpoint=endpoint,
                             )
 

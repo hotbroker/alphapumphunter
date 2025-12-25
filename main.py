@@ -945,7 +945,10 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 msg = msg+f"{frate:.2f}% 时间:{ftimestr}({fundingIntervalHours}h)\n"
 
                         print(msg)
-                        await send_notification_async(alpha_hunter_group, msg, title="Alpha PumpHunter Alert\n")
+                        title="Alpha起飞告警\n"
+                        if utils.is_goodpump(vollist, takervol):
+                            title=f"Alpha起飞告警 推荐：{sym}\n"
+                        await send_notification_async(alpha_hunter_group, msg, title=title)
                 # pacing
                 elapsed = time.time() - tick_start
                 sleep_for = max(0.0, interval - elapsed)

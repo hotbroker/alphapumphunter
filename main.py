@@ -561,6 +561,21 @@ async def get_symbol_future_price(symbol):
         logger.opt(exception=True).warning(f"Failed to get_symbol_future_price {symbol}: {e}")
         return None
 
+BINANCE_FAPI_TICKER_24H = "https://www.binance.com/fapi/v1/ticker/24hr"
+
+async def fetch_binance_futures_24h() -> List[Dict[str, Any]]:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json",
+        "Connection": "keep-alive",
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(BINANCE_FAPI_TICKER_24H, headers=headers)
+        r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, list):
+            raise ValueError("Unexpected response format from Binance 24hr ticker")
+        return data
 
 async def place_future_order(sym,vibelevel):
     possize = vibeLevelPos[vibelevel]
@@ -872,8 +887,14 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                     
                             
                         msg += f'10分钟涨幅:{change:.2f}%\n'
-
-                        #msg += f'窗口:{window_min}分钟\n'
+                        rows = await fetch_binance_futures_24h()
+                        futureQV=0
+                        for row in rows:
+                            if row.get("symbol") == sym+"USDT":
+                                futureQV = float(row.get("quoteVolume",0))
+                                break
+                        
+                        msg += f'24小时合约成交量:{utils.format_big_number(futureQV)}\n'
                         msg += f'24小时涨幅:{str(it.get("percentChange24h", "-"))}%\n'
                         msg += f'24小时成交量:{utils.format_big_number(it.get("volume24h", "-"))}\n'
                         msg += f'流动性:{utils.format_big_number(it.get("liquidity", "-"))}\n\n'
@@ -946,7 +967,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
                         print(msg)
                         title="Alpha起飞告警\n"
-                        if utils.is_goodpump(vollist, takervol):
+                        if utils.is_goodpump(vollist, takervol) and realTimeFundingRate and float(realTimeFundingRate)<-0.1 and futureQV and futureQV>3000*10000:
                             title=f"Alpha起飞告警 推荐：{sym}\n"
                         await send_notification_async(alpha_hunter_group, msg, title=title)
                 # pacing

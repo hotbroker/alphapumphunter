@@ -614,7 +614,7 @@ async def place_future_order_no_dup(sym,vibelevel):
             if holdingsym.upper() == sym.upper():
                 msg=f'检测到已有持仓，无法重复下单，当前持仓币种{holdingsym}，未实现盈亏 {v:.2f} USD\n\n'
                 logger.info(msg)
-                await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
+                #await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
                 return 
     return await place_future_order(sym,vibelevel)
 

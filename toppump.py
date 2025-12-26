@@ -98,8 +98,8 @@ async def place_future_order_no_dup(sym,vibelevel):
                 msg=f'检测到已有持仓，无法重复下单，当前持仓币种{holdingsym}，未实现盈亏 {v:.2f} USD\n\n'
                 logger.info(msg)
                 #await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
-                await utils.send_notification_feishu_async('https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9', 
-                msg,title="bybit 自动下单合约\n\n")
+                #await utils.send_notification_feishu_async('https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9', 
+                #msg,title="bybit 自动下单合约\n\n")
                 return 
     return await place_future_order(sym,vibelevel)
 
@@ -605,7 +605,7 @@ async def cmd_run_simple(
                             last_alert_ts[sym] = now_ts
                             res = await place_future_order_no_dup(sym,energy_level)
                             success = res is not None
-                            await send_notification_async('veryverybad', f'下单 {_base_from_symbol(sym)} energy_level {energy_level}\n结果：{success}', title="bybit 自动下单合约\n\n")  
+                            #await send_notification_async('veryverybad', f'下单 {_base_from_symbol(sym)} energy_level {energy_level}\n结果：{success}', title="bybit 自动下单合约\n\n")  
                             
                             await report_pos_pnl()
 

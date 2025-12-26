@@ -967,8 +967,10 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
                         print(msg)
                         title="Alpha起飞告警\n"
-                        if utils.is_goodpump(vollist, takervol) and realTimeFundingRate and float(realTimeFundingRate)<-0.1 and futureQV and futureQV>3000*10000:
-                            title=f"Alpha起飞告警 推荐：{sym}\n"
+                        #emoji fire
+            
+                        if utils.is_goodpump(vollist, takervol)  and futureQV and futureQV>3000*10000:
+                            title=f"Alpha起飞告警 🔥🔥🔥 推荐：{sym}\n"
                         await send_notification_async(alpha_hunter_group, msg, title=title)
                 # pacing
                 elapsed = time.time() - tick_start

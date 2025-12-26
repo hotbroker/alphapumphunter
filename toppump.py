@@ -661,8 +661,8 @@ async def cmd_run_simple(
                             content = "\n".join(msg)
                             logger.info(f"Sending alert notification for {sym}:\n{content}")
                             title="补充其它币种提示\n"
-                            if utils.is_goodpump(vol_last5, ratios) and realTimeFundingRate and float(realTimeFundingRate)<-0.1 and qv and qv>3000*10000:
-                                title=f"补充其它币种提示 推荐：{_base_from_symbol(sym)}\n"
+                            if utils.is_goodpump(vol_last5, ratios)  and qv and qv>3000*10000:
+                                title=f"补充其它币种提示 🔥🔥推荐：{_base_from_symbol(sym)}\n"
                             await send_notification_async(
                                 notify_to,
                                 content,

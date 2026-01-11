@@ -25,10 +25,10 @@ logger.info(f'start with file {os.path.basename(os.path.abspath(__file__))} pid 
 
 
 alpha_hunter_group='53806935982@chatroom'
-MARKETWEBB_AGGREGATE = "https://www.marketwebb.co/bapi/defi/v1/public/alpha-trade/aggTicker24"
-MARKETWEBB_FAPI_OI = "https://www.marketwebb.co/fapi/v1/openInterest"#好像后来取消了 2025-11-20
+MARKETWEBB_AGGREGATE = "https://www.binance.com/bapi/defi/v1/public/alpha-trade/aggTicker24"
+MARKETWEBB_FAPI_OI = "https://www.binance.com/fapi/v1/openInterest"#好像后来取消了 2025-11-20
 MARKETWEBB_FAPI_OI = "https://www.binance.com/fapi/v1/openInterest" 
-MARKETWEBB_SPOT_AGGTRADES = "https://www.marketwebb.co/api/v3/aggTrades"
+MARKETWEBB_SPOT_AGGTRADES = "https://www.binance.com/api/v3/aggTrades"
 
 # Hardcoded MarketWebb headers (as provided by user)
 MARKETWEBB_HEADERS = {

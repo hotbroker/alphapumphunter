@@ -138,7 +138,7 @@ def load_keys() -> Tuple[str, str]:
         "Missing API credentials. Set BYBIT_API_KEY/BYBIT_API_SECRET or provide bybitKey.txt with two lines."
     )
 
-MARKETWEBB_AGGREGATE = "https://www.marketwebb.co/bapi/defi/v1/public/alpha-trade/aggTicker24"
+MARKETWEBB_AGGREGATE = "https://www.binance.com/bapi/defi/v1/public/alpha-trade/aggTicker24"
 
 # Hardcoded MarketWebb headers (as provided by user)
 MARKETWEBB_HEADERS = {

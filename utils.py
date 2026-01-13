@@ -4,6 +4,8 @@ import os,json
 from typing import Deque, Dict, Iterable, List, MutableMapping, Optional, Set, Tuple
 feishu_myself = 'https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9'
 feishu_alpha = 'https://open.feishu.cn/open-apis/bot/v2/hook/0e014c3c-3891-4b65-b869-9a5aae2b1828'
+#上架alpha通知研究
+feishu_alpha_new_list = 'https://open.feishu.cn/open-apis/bot/v2/hook/d4011103-2a39-473b-befe-1ebc0c57c12f'
 
 def format_big_number(num):
     num = float(num)
@@ -270,3 +272,30 @@ def is_goodpump(buyvol, buyrate):
     if max(buyvol[-4:])>500*10000 and max(buyrate[-4:])>0.56 and min(buyrate[-4:])>0.51:
         return True
     return False
+
+
+
+def send_notification_feishu(
+    touser: str,
+    content: str,
+    title: str = "Alert",
+) -> None:
+    feishudata = {
+  "msg_type": "text",   
+  "content": {  
+  "text": f"{title}\n{content}"
+  }
+    }
+
+    def sending_thread():
+        try:
+            feishuurl = f'https://open.feishu.cn/open-apis/bot/v2/hook/{touser}'
+            if touser.startswith('http'):
+                feishuurl = touser
+            print(f'sending {feishuurl}')
+            requests.post(feishuurl, json=feishudata)
+        except Exception as e:
+            logger.warning(f"notify failed: {e}")
+    thread = threading.Thread(target=sending_thread)
+    thread.start()
+

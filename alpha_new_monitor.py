@@ -271,8 +271,8 @@ class AlphaNewMonitor:
         now = time.time()
         max_age_seconds = CACHE_MAX_AGE_DAYS * 24 * 3600
         
-        # 并发查询所有缓存代币的 volume24h
-        async def check_cached_token(address: str, cache_entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        # 顺序查询所有缓存代币的 volume24h（避免并发触发限流）
+        for address, cache_entry in self.token_cache.items():
             cached_time = cache_entry.get('cached_time', 0)
             token_data = cache_entry.get('token_data', {})
             chain_id = token_data.get('chainId', '56')
@@ -281,37 +281,27 @@ class AlphaNewMonitor:
             age = now - cached_time
             if age > max_age_seconds:
                 logger.debug(f"代币 {token_data.get('symbol', address)} 缓存超过7天，不作为候选")
-                return None
+                continue
             
             # 查询最新 volume24h
             dynamic_info = await self.fetch_token_dynamic_info(chain_id, address)
             if dynamic_info is None:
                 # 查询失败，仍然使用缓存的数据
-                return token_data
+                valid_tokens.append(token_data)
+                continue
             
             try:
                 volume24h = float(dynamic_info.get('volume24h', 0))
                 if volume24h < CACHED_VOLUME_THRESHOLD:
                     logger.debug(f"代币 {token_data.get('symbol', address)} volume24h={format_big_number(volume24h)} 低于阈值，不作为候选")
-                    return None
+                    continue
                 
                 # 更新 token_data 中的 volume 信息
                 token_data['volume'] = str(volume24h)
                 token_data['volume24h_dynamic'] = volume24h
-                return token_data
+                valid_tokens.append(token_data)
             except (ValueError, TypeError):
-                return token_data
-        
-        tasks = [
-            check_cached_token(addr, entry) 
-            for addr, entry in self.token_cache.items()
-        ]
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        for result in results:
-            if result is not None and not isinstance(result, Exception):
-                valid_tokens.append(result)
+                valid_tokens.append(token_data)
         
         return valid_tokens
     
@@ -479,9 +469,12 @@ class AlphaNewMonitor:
         
         logger.info(f"候选代币数: {len(all_candidates)} (实时: {len(high_volume_tokens)}, 缓存有效: {len(cached_tokens)})")
         
-        # 并发检查每个代币
-        tasks = [self.check_and_notify(token) for token in all_candidates.values()]
-        await asyncio.gather(*tasks, return_exceptions=True)
+        # 顺序检查每个代币（避免并发触发限流）
+        for token in all_candidates.values():
+            try:
+                await self.check_and_notify(token)
+            except Exception as e:
+                logger.warning(f"检查代币失败: {e}")
     
     async def run(self):
         """持续运行监控"""

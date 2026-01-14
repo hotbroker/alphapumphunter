@@ -182,6 +182,8 @@ class AlphaNewMonitor:
             client = await self._get_client()
             url = f"{TOKEN_DYNAMIC_INFO_URL}?chainId={chain_id}&contractAddress={contract_address}"
             response = await client.get(url)
+            if response.status_code ==429:
+                await asyncio.sleep(1)
             response.raise_for_status()
             data = response.json()
             
@@ -224,6 +226,8 @@ class AlphaNewMonitor:
             client = await self._get_client()
             url = f"{ALPHA_TOKEN_INFO_URL}?chainId={chain_id}&contractAddress={contract_address}"
             response = await client.get(url)
+            if response.status_code ==429:
+                await asyncio.sleep(1)
             response.raise_for_status()
             data = response.json()
             

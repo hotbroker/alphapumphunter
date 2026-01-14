@@ -22,6 +22,7 @@ import time
 import os
 from typing import Dict, List, Set, Any, Optional
 from datetime import datetime
+from functools import wraps
 
 import httpx
 from loguru import logger
@@ -85,6 +86,34 @@ HEADERS = {
 # 状态文件路径
 STATE_FILE = "alpha_new_monitor_state.json"
 TOKEN_CACHE_FILE = "alpha_new_monitor_token_cache.json"
+
+
+def retry_on_429(max_retries=3, delay=2):
+    """限流重试修饰器"""
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return await func(*args, **kwargs)
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 429:
+                        logger.warning(f"接口 {func.__name__} 触发限流 (429)，尝试重试 {attempt + 1}/{max_retries}")
+                        await asyncio.sleep(delay)
+                        last_exception = e
+                        continue
+                    raise e
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise e
+                    logger.debug(f"接口 {func.__name__} 尝试失败 {attempt + 1}: {e}")
+                    await asyncio.sleep(1)
+                    last_exception = e
+            if last_exception:
+                raise last_exception
+        return wrapper
+    return decorator
 
 
 class AlphaNewMonitor:
@@ -157,88 +186,72 @@ class AlphaNewMonitor:
         if self.client and not self.client.is_closed:
             await self.client.aclose()
     
+    @retry_on_429(max_retries=3, delay=2)
     async def fetch_pulse_rank_list(self) -> List[Dict[str, Any]]:
         """获取潜力代币排行榜"""
-        try:
-            client = await self._get_client()
-            response = await client.get(PULSE_RANK_LIST_URL)
-            response.raise_for_status()
-            data = response.json()
-            
-            if data.get('code') == '000000':
-                tokens = data.get('data', {}).get('tokens', [])
-                logger.debug(f"获取到 {len(tokens)} 个潜力代币")
-                return tokens
-            else:
-                logger.warning(f"API 返回错误: {data.get('message')}")
-                return []
-        except Exception as e:
-            logger.warning(f"获取潜力代币列表失败: {e}")
+        client = await self._get_client()
+        response = await client.get(PULSE_RANK_LIST_URL)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('code') == '000000':
+            tokens = data.get('data', {}).get('tokens', [])
+            logger.debug(f"获取到 {len(tokens)} 个潜力代币")
+            return tokens
+        else:
+            logger.warning(f"API 返回错误: {data.get('message')}")
             return []
     
+    @retry_on_429(max_retries=3, delay=2)
     async def fetch_token_dynamic_info(self, chain_id: str, contract_address: str) -> Optional[Dict[str, Any]]:
         """获取代币的动态信息（包括 volume24h）"""
-        try:
-            client = await self._get_client()
-            url = f"{TOKEN_DYNAMIC_INFO_URL}?chainId={chain_id}&contractAddress={contract_address}"
-            response = await client.get(url)
-            if response.status_code ==429:
-                await asyncio.sleep(1)
-            response.raise_for_status()
-            data = response.json()
-            
-            if data.get('code') == '000000' and data.get('data') is not None:
-                return data.get('data')
-            else:
-                return None
-        except Exception as e:
-            logger.debug(f"获取代币 {contract_address} 动态信息失败: {e}")
+        client = await self._get_client()
+        url = f"{TOKEN_DYNAMIC_INFO_URL}?chainId={chain_id}&contractAddress={contract_address}"
+        response = await client.get(url)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('code') == '000000' and data.get('data') is not None:
+            return data.get('data')
+        else:
             return None
     
+    @retry_on_429(max_retries=3, delay=2)
     async def fetch_alpha_agg_list(self) -> Set[str]:
         """获取所有 Alpha 代币列表（方法1）"""
-        try:
-            client = await self._get_client()
-            response = await client.get(ALPHA_AGG_TICKER_URL)
-            response.raise_for_status()
-            data = response.json()
-            
-            if data.get('code') == '000000':
-                alpha_tokens = data.get('data', [])
-                # 返回所有 contractAddress 的集合（转小写以便比较）
-                addresses = {
-                    token.get('contractAddress', '').lower() 
-                    for token in alpha_tokens 
-                    if token.get('contractAddress')
-                }
-                logger.debug(f"Alpha 列表共 {len(addresses)} 个代币")
-                return addresses
-            else:
-                logger.warning(f"获取 Alpha 列表失败: {data.get('message')}")
-                return set()
-        except Exception as e:
-            logger.warning(f"获取 Alpha 列表失败: {e}")
+        client = await self._get_client()
+        response = await client.get(ALPHA_AGG_TICKER_URL)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('code') == '000000':
+            alpha_tokens = data.get('data', [])
+            # 返回所有 contractAddress 的集合（转小写以便比较）
+            addresses = {
+                token.get('contractAddress', '').lower() 
+                for token in alpha_tokens 
+                if token.get('contractAddress')
+            }
+            logger.debug(f"Alpha 列表共 {len(addresses)} 个代币")
+            return addresses
+        else:
+            logger.warning(f"获取 Alpha 列表失败: {data.get('message')}")
             return set()
     
+    @retry_on_429(max_retries=3, delay=2)
     async def check_token_alpha_info(self, chain_id: str, contract_address: str) -> Optional[Dict[str, Any]]:
         """检查单个代币是否在 Alpha（方法2）"""
-        try:
-            client = await self._get_client()
-            url = f"{ALPHA_TOKEN_INFO_URL}?chainId={chain_id}&contractAddress={contract_address}"
-            response = await client.get(url)
-            if response.status_code ==429:
-                await asyncio.sleep(1)
-            response.raise_for_status()
-            data = response.json()
-            
-            if data.get('code') == '000000' and data.get('data') is not None:
-                # 存在于 Alpha 列表
-                return data.get('data')
-            else:
-                # 不存在
-                return None
-        except Exception as e:
-            logger.warning(f"检查代币 {contract_address} Alpha 信息失败: {e}")
+        client = await self._get_client()
+        url = f"{ALPHA_TOKEN_INFO_URL}?chainId={chain_id}&contractAddress={contract_address}"
+        response = await client.get(url)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('code') == '000000' and data.get('data') is not None:
+            # 存在于 Alpha 列表
+            return data.get('data')
+        else:
+            # 不存在
             return None
     
     async def update_alpha_cache(self):

@@ -156,7 +156,12 @@ class AlphaDiffMonitor:
             ismeme = True if price else False    
             if not price:
                 price = '0'
-            
+            volume_24h =0 if not volume_24h else volume_24h
+            market_cap =0 if not market_cap else market_cap
+            fdv =0 if not fdv else fdv
+            liquidity =0 if not liquidity else liquidity
+ 
+            total_supply =0 if not total_supply else total_supply
             msg_lines = [
                 f"🚀🚀🚀 Alpha 新增代币! {symbol}",
                 f"",

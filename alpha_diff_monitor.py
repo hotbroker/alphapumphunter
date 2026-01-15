@@ -62,6 +62,15 @@ HEADERS = {
     'Accept-Encoding': 'gzip, deflate, br',
     'Connection': 'keep-alive',
 }
+#HEADERS no-cache
+HEADERS_NO_CACHE = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Cache-Control': 'no-cache',
+}
 
 
 class AlphaDiffMonitor:
@@ -69,6 +78,7 @@ class AlphaDiffMonitor:
     
     def __init__(self):
         self.client: Optional[httpx.AsyncClient] = None
+        self.clients5: Optional[httpx.AsyncClient] = None
         # 上一次获取的 Alpha 列表: contractAddress -> token_data
         self.previous_tokens: Dict[str, Dict[str, Any]] = {}
         self.is_first_run: bool = True
@@ -78,16 +88,27 @@ class AlphaDiffMonitor:
         if self.client is None or self.client.is_closed:
             self.client = httpx.AsyncClient(timeout=10, headers=HEADERS)
         return self.client
-    
+    #socks5 proxy client
+    async def _get_socks5_client(self,s5proxy) -> httpx.AsyncClient:
+        """获取或创建异步 HTTP 客户端"""
+        if self.clients5 is None or self.clients5.is_closed:
+            self.clients5 = httpx.AsyncClient(timeout=10, headers=HEADERS, proxy=s5proxy)
+        return self.clients5
+
     async def close(self):
         """关闭客户端"""
         if self.client and not self.client.is_closed:
             await self.client.aclose()
+        if self.clients5 and not self.clients5.is_closed:
+            await self.clients5.aclose()
     
-    async def fetch_alpha_list(self) -> Dict[str, Dict[str, Any]]:
+    async def fetch_alpha_list(self,s5proxy='') -> Dict[str, Dict[str, Any]]:
         """获取所有 Alpha 代币列表"""
         try:
-            client = await self._get_client()
+            if s5proxy:
+                client = await self._get_socks5_client(s5proxy)
+            else:
+                client = await self._get_client()
             response = await client.get(ALPHA_AGG_TICKER_URL)
             response.raise_for_status()
             data = response.json()
@@ -181,10 +202,10 @@ class AlphaDiffMonitor:
         except Exception as e:
             logger.opt(exception=True).warning(f"发送飞书通知失败: {e}")
     
-    async def run_once(self):
+    async def run_once(self,s5proxy=''):
         """执行一轮监控"""
         # 获取当前 Alpha 列表
-        current_tokens = await self.fetch_alpha_list()
+        current_tokens = await self.fetch_alpha_list(s5proxy)
         
         if not current_tokens:
             logger.warning("获取 Alpha 列表为空，跳过本轮")
@@ -228,16 +249,24 @@ class AlphaDiffMonitor:
         # 更新内存中的上次列表
         self.previous_tokens = current_tokens
     
-    async def run(self):
+    async def run(self,s5proxy=''):
         """持续运行监控"""
         logger.info(f"开始监控 Alpha 列表变化，间隔 {MONITOR_INTERVAL}s")
-        
+        proxylist = ['',s5proxy]
+        proxyindex = 0
+        chkcnt = 0
         try:
             while True:
                 start = time.time()
+                chkcnt = chkcnt+1
                 
                 try:
-                    await self.run_once()
+                    
+                    proxyindex = proxyindex % len(proxylist)
+                    thisproxy = proxylist[proxyindex]
+                    proxyindex = proxyindex + 1
+                    logger.debug(f"第{chkcnt}次检查,使用代理: {thisproxy}")
+                    await self.run_once(thisproxy)
                 except Exception as e:
                     logger.opt(exception=True).warning(f"监控轮次失败: {e}")
                 
@@ -260,13 +289,17 @@ async def main():
     
     parser = argparse.ArgumentParser(description="Binance Alpha 差异监控")
     parser.add_argument("--interval", type=float, default=1.0, help="监控间隔（秒，默认1）")
+    parser.add_argument("--no-cache", action="store_true", help="禁用缓存")
+    #proxy
+    parser.add_argument("--proxy", type=str, default='', help="代理地址")
     args = parser.parse_args()
     
-    global MONITOR_INTERVAL
+    global MONITOR_INTERVAL,HEADERS
     MONITOR_INTERVAL = args.interval
+    HEADERS = HEADERS_NO_CACHE if args.no_cache else HEADERS
     
     monitor = AlphaDiffMonitor()
-    await monitor.run()
+    await monitor.run(args.proxy)
 
 
 if __name__ == "__main__":

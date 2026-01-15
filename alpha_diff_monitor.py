@@ -413,7 +413,7 @@ class AlphaDiffMonitor:
                 
                 json=payload
             )
-            
+            response.raise_for_status()
             if response.status_code == 200:
                 data = response.json()
                 if data.get('code') == 0:
@@ -422,9 +422,13 @@ class AlphaDiffMonitor:
                     logger.warning(f"❌ GMGN 购买失败: {data.get('message')} (Reason: {data.get('reason')})")
             else:
                 logger.warning(f"❌ GMGN 购买请求失败: HTTP {response.status_code} - {response.text[:200]}")
+                utils.send_notification_feishu(utils.feishu_myself,f'GMGN 购买请求失败: HTTP {response.status_code} - {response.text[:200]}', 'gmgn buy new alpha')
                 
         except Exception as e:
             logger.error(f"⚠️ 执行购买函数出错: {e}")
+            utils.send_notification_feishu(utils.feishu_myself,f'GMGN 购买函数出错:{e}', 'gmgn buy new alpha')
+            return
+
     async def run(self, s5proxy='', buy_config=None):
         """持续运行监控"""
         if buy_config:
@@ -442,7 +446,6 @@ class AlphaDiffMonitor:
         butthistoken = current_tokens[klinelife]
         thread = threading.Thread(target=self.buy_token, args=(butthistoken,))
         thread.start()        
-        
         # tokenlist = range(10)
         # for token_address in tokenlist:
         #     thread = threading.Thread(target=self.buy_token, args=(token_address,))

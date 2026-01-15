@@ -306,27 +306,26 @@ def test_gmgn_cookie_ok(headersparams, cookiesparams):
 
 
     cookies = {
-        '_ga': 'GA1.1.421334895.1727329259',
+        '_ga': 'GA1.1.2108017409.1727160958',
         'GMGN_LOCALE': 'zh-CN',
-        'GMGN_THEME': 'dark',
         'GMGN_CHAIN': 'sol',
-        '_ga_0XM0LYXGC8': 'deleted',
-        'cf_clearance': 'gACJRZmlGc_8UJsIdeVyVV6tkogwuQ5AxkhX0m40Myc-1761628192-1.2.1.1-uiUKVGEPhDhOC9zb46Ccpz6KWI0b8Jx5fPpn1WC8yEYpNlIceMCi.HPur5qiU2VzuG1DaHGW5SHEzY1MbOjZuKaasz2go7s3ZzXPin9kvKIcLro2eJkzuhz.hp4djsKM8Vv803Ipf2gHitaGE.D1qA1uAL12RlDDKI9IpVQIbepwJF7MWw9.Iknn8hInj8tRx_8HDsOmgYnmYecgysxEr0w320vC1OkCBjAp7EyCiXk',
-        '__cf_bm': 'k3JGFK8zPu.A1us6fPbX8.h5IA0BIRzYPpewswe3JZI-1768494698-1.0.1.1-xmDJdqz6cz3vqoMuFysqIpjh6vTteOe6h8ENLbWm4RH1kj5W5vo3FcP82eYYPI_Q.EkvAxz2AhCzJJA0Tk7UjlsPb9aCoYOMS2Mq32lbZ6s',
-        'sid': 'gmgn%7C7e674587cb1640176169e211217dfab6',
-        '_ga_UGLVBMV4Z0': 'GS1.2.1768495378402796.8193cb66cf2330ab7378027e46aececc.e%2FngVKOn51yfo4K2INr8Lg%3D%3D.yZFGzlPV9ZlZGcP2pXLEzA%3D%3D.m8Noo0%2FaOhWOdGkP01QrZA%3D%3D.uOeJTTK2IV5KWn5o83ETaw%3D%3D',
-        '_ga_0XM0LYXGC8': 'GS2.1.s1768493470$o2408$g1$t1768495388$j50$l0$h0',
+        'GMGN_THEME': 'dark',
+        'cf_clearance': '5Mq_hUr50TCMAgHcIlQx2Mnv4fWP3GL93D_hGH8vN1c-1748082928-1.2.1.1-CYTMGT8IObWtzvgfYkH5jeLaN7rCriJh7ke3MivgdiXmrxuOLf13uYmb66I0Yg5Ce97PI.gQTko7b96lofNfVS3qjtbKWKi1CoYRCG5G42.IIWsuikqccW.72DL7RLF788jzus3j5_IYo0aKT9NESESrksQd5.CIK.nZ4Zv7Hjw6Qo8l9lzItLP2yWvOjmyQw9pEe4wZCwGBx.k8G3dropyhdNyj.Un2X3hVGQMaanpyGYRqbSQeolHHMmQi6LR7l3Ci0UC0Y2WfxsDVL6v2jNub5mCP4zjecAHJjIupvRu6h7qbMCCYK6G1KbHaYx_bpqLXHezerALwC8I3OnxfN55VUzIkyTTpVY4P9QLf96Y',
+        'sid': 'gmgn%7Ceb0b2589bc63c06e13267c69bb2b446d',
+        '_ga_UGLVBMV4Z0': 'GS1.2.1768504831568985.7b96199dcfd2f38d94e1e8e97c0194cb.GQfStk7ZaaNzB1JDYHS80w%3D%3D.5N2HctwSQMVmnA%2BL%2BxY5gg%3D%3D.cMp8aYBvZ8xzv8of3P3n6g%3D%3D.BaQwbn34xaOLmtvJvSfdQQ%3D%3D',
+        '__cf_bm': 'On3s_AoqZnoukRQGYj4NzVpAvAgt6UdpddhrmxRJ6vM-1768505278-1.0.1.1-Odk4AVfvMOpUSlR6P57B_AY1LpfS5Hh1kVSC5zvj3BxS4nq0MXJSf3.FwdWzGqdH2ncynixeLjLKzoD5M4rDT.K9x7LYtZWdsVK.SbXpMVY',
+        '_ga_0XM0LYXGC8': 'GS2.1.s1768504376$o412$g1$t1768505309$j32$l0$h0',
     }
 
     headers = {
         'accept': 'application/json, text/plain, */*',
         'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        'authorization': 'Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJnbWduLmFpL2FjY2VzcyIsImRhdGEiOnsidXNlcl9pZCI6ImU1MjdjYTJjLTdiYmMtNDU1Yy04MTNiLTE4ZmQzYzM1M2QxYSIsImNsaWVudF9pZCI6ImdtZ25fd2ViXzIwMjYwMTA2LTk1NzgtMDE5OGQ1NyIsImRldmljZV9pZCI6IjE2NTBiNjJkLTRjYWYtNDM2Ni1iZWFlLWVjNjRiMmU4OTYxMSIsImZhdGhlcl9pZCI6ImNjZDQwMTUzLWRjYTMtNDgzYS1hMmVjLTU2Zjk4ZTg1NDgwNiIsImZpbmdlcnByaW50IjoidjE2NDE1MDYwMjhhYzFlMWM0ZDBkNDA5M2MyOTFhNGE5NiIsImFwcCI6ImdtZ24iLCJwbGF0Zm9ybSI6IndlYiJ9LCJleHAiOjE3Njg0OTcxNzgsImlhdCI6MTc2ODQ5NTM3OCwiaXNzIjoiZ21nbi5haS9zaWduZXIiLCJqdGkiOiJiMjVlYTUzYy1mMzgxLTRiYjgtOWVmNy0zMmYzNzQyNzUxNzgiLCJuYmYiOjE3Njg0OTUzNzgsInN1YiI6ImdtZ24uYWkvYWNjZXNzIiwidXNlcl9pZCI6ImU1MjdjYTJjLTdiYmMtNDU1Yy04MTNiLTE4ZmQzYzM1M2QxYSIsInZlciI6IjEuMCJ9.p8panhcCa81I-EQAIzU2fX8JO9AWnhYJzXsg8NdJ4hZtmp5Pq3_UmFN-XKLnAtud9u-vWTEMI2ey2nWYwpNrzQ',
-        'baggage': 'sentry-environment=production,sentry-release=20260115-9909-b6161f8,sentry-public_key=93c25bab7246077dc3eb85b59d6e7d40,sentry-trace_id=6f451203fe1d4470bf804cc4f56e4f5b,sentry-org_id=4505147559706624,sentry-transaction=%2Fportfolio%2F%5Bcode%5D,sentry-sampled=false,sentry-sample_rand=0.48135157248348515,sentry-sample_rate=0.01',
+        'authorization': 'Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJnbWduLmFpL2FjY2VzcyIsImRhdGEiOnsidXNlcl9pZCI6IjY3YjM3YzIyLTQ2MDYtNDZmYy04NTNmLTM1YzIwOGY0NGEzNiIsImNsaWVudF9pZCI6ImdtZ25fd2ViXzIwMjYwMTE1LTk5MDktYjYxNjFmOCIsImRldmljZV9pZCI6ImY1OGQ5OWIxLTZhNjAtNGZjOC1iMTgxLWUwMWE2ZmNhMjQyNyIsImZhdGhlcl9pZCI6ImI0ZTdmMWFiLTgzMDgtNGY5ZC1iMjIwLTMwYzc4NGNhNmY5MSIsImZpbmdlcnByaW50IjoidjE2MTRmOWNlNGRlNjAxN2Y1NmNiMWNiOGRkM2JmMmQ1MCIsImFwcCI6ImdtZ24iLCJwbGF0Zm9ybSI6IndlYiJ9LCJleHAiOjE3Njg1MDY2MzEsImlhdCI6MTc2ODUwNDgzMSwiaXNzIjoiZ21nbi5haS9zaWduZXIiLCJqdGkiOiIxNGZhN2VmMi0xMDdkLTQxZWMtOTgyZS01YzEyYzBhMzQzZjciLCJuYmYiOjE3Njg1MDQ4MzEsInN1YiI6ImdtZ24uYWkvYWNjZXNzIiwidXNlcl9pZCI6IjY3YjM3YzIyLTQ2MDYtNDZmYy04NTNmLTM1YzIwOGY0NGEzNiIsInZlciI6IjEuMCJ9.zL3LG6Awso8-tBFTZhx5OKlI0meC7mmgRKnQVy_zWJrTM8FTnQpUFIpjhVVcjy3WqFaC1tegRkW7Omoi58aEgQ',
+        'baggage': 'sentry-environment=production,sentry-release=20260115-9909-b6161f8,sentry-public_key=93c25bab7246077dc3eb85b59d6e7d40,sentry-trace_id=bee2ef2433e5489581b2df0e9d6bb4d0,sentry-org_id=4505147559706624,sentry-transaction=%2Fportfolio%2F%5Bcode%5D,sentry-sampled=false,sentry-sample_rand=0.1544530570429874,sentry-sample_rate=0.01',
         'cache-control': 'no-cache',
         'pragma': 'no-cache',
         'priority': 'u=1, i',
-        'referer': 'https://gmgn.ai/portfolio/SisumwM3?chain=bsc',
+        'referer': 'https://gmgn.ai/portfolio/5zqksANI?chain=bsc',
         'sec-ch-ua': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
         'sec-ch-ua-arch': '"x86"',
         'sec-ch-ua-bitness': '"64"',
@@ -339,14 +338,13 @@ def test_gmgn_cookie_ok(headersparams, cookiesparams):
         'sec-fetch-dest': 'empty',
         'sec-fetch-mode': 'cors',
         'sec-fetch-site': 'same-origin',
-        'sentry-trace': '6f451203fe1d4470bf804cc4f56e4f5b-af162bc85bedeeb1-0',
+        'sentry-trace': 'bee2ef2433e5489581b2df0e9d6bb4d0-b83ebab5f4c9390e-0',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-        # 'cookie': '_ga=GA1.1.421334895.1727329259; GMGN_LOCALE=zh-CN; GMGN_THEME=dark; GMGN_CHAIN=sol; _ga_0XM0LYXGC8=deleted; cf_clearance=gACJRZmlGc_8UJsIdeVyVV6tkogwuQ5AxkhX0m40Myc-1761628192-1.2.1.1-uiUKVGEPhDhOC9zb46Ccpz6KWI0b8Jx5fPpn1WC8yEYpNlIceMCi.HPur5qiU2VzuG1DaHGW5SHEzY1MbOjZuKaasz2go7s3ZzXPin9kvKIcLro2eJkzuhz.hp4djsKM8Vv803Ipf2gHitaGE.D1qA1uAL12RlDDKI9IpVQIbepwJF7MWw9.Iknn8hInj8tRx_8HDsOmgYnmYecgysxEr0w320vC1OkCBjAp7EyCiXk; __cf_bm=k3JGFK8zPu.A1us6fPbX8.h5IA0BIRzYPpewswe3JZI-1768494698-1.0.1.1-xmDJdqz6cz3vqoMuFysqIpjh6vTteOe6h8ENLbWm4RH1kj5W5vo3FcP82eYYPI_Q.EkvAxz2AhCzJJA0Tk7UjlsPb9aCoYOMS2Mq32lbZ6s; sid=gmgn%7C7e674587cb1640176169e211217dfab6; _ga_UGLVBMV4Z0=GS1.2.1768495378402796.8193cb66cf2330ab7378027e46aececc.e%2FngVKOn51yfo4K2INr8Lg%3D%3D.yZFGzlPV9ZlZGcP2pXLEzA%3D%3D.m8Noo0%2FaOhWOdGkP01QrZA%3D%3D.uOeJTTK2IV5KWn5o83ETaw%3D%3D; _ga_0XM0LYXGC8=GS2.1.s1768493470$o2408$g1$t1768495388$j50$l0$h0',
+        # 'cookie': '_ga=GA1.1.2108017409.1727160958; GMGN_LOCALE=zh-CN; GMGN_CHAIN=sol; GMGN_THEME=dark; cf_clearance=5Mq_hUr50TCMAgHcIlQx2Mnv4fWP3GL93D_hGH8vN1c-1748082928-1.2.1.1-CYTMGT8IObWtzvgfYkH5jeLaN7rCriJh7ke3MivgdiXmrxuOLf13uYmb66I0Yg5Ce97PI.gQTko7b96lofNfVS3qjtbKWKi1CoYRCG5G42.IIWsuikqccW.72DL7RLF788jzus3j5_IYo0aKT9NESESrksQd5.CIK.nZ4Zv7Hjw6Qo8l9lzItLP2yWvOjmyQw9pEe4wZCwGBx.k8G3dropyhdNyj.Un2X3hVGQMaanpyGYRqbSQeolHHMmQi6LR7l3Ci0UC0Y2WfxsDVL6v2jNub5mCP4zjecAHJjIupvRu6h7qbMCCYK6G1KbHaYx_bpqLXHezerALwC8I3OnxfN55VUzIkyTTpVY4P9QLf96Y; sid=gmgn%7Ceb0b2589bc63c06e13267c69bb2b446d; _ga_UGLVBMV4Z0=GS1.2.1768504831568985.7b96199dcfd2f38d94e1e8e97c0194cb.GQfStk7ZaaNzB1JDYHS80w%3D%3D.5N2HctwSQMVmnA%2BL%2BxY5gg%3D%3D.cMp8aYBvZ8xzv8of3P3n6g%3D%3D.BaQwbn34xaOLmtvJvSfdQQ%3D%3D; __cf_bm=On3s_AoqZnoukRQGYj4NzVpAvAgt6UdpddhrmxRJ6vM-1768505278-1.0.1.1-Odk4AVfvMOpUSlR6P57B_AY1LpfS5Hh1kVSC5zvj3BxS4nq0MXJSf3.FwdWzGqdH2ncynixeLjLKzoD5M4rDT.K9x7LYtZWdsVK.SbXpMVY; _ga_0XM0LYXGC8=GS2.1.s1768504376$o412$g1$t1768505309$j32$l0$h0',
     }
 
-
     params = {
-        'device_id': '1650b62d-4caf-4366-beae-ec64b2e89611',
+        'device_id': 'f58d99b1-6a60-4fc8-b181-e01a6fca2427',
         'fp_did': '5c6d41de35d26eaad98548f2c66762c8',
         'client_id': 'gmgn_web_20260115-9909-b6161f8',
         'from_app': 'gmgn',
@@ -357,9 +355,9 @@ def test_gmgn_cookie_ok(headersparams, cookiesparams):
         'os': 'web',
         'worker': '0',
         'chain': 'bsc',
-        'wallet_addresses': '0x8218a5246ea0b0eef2144352c599e8b39a764eeb',
-        'hide_abnormal': 'false',
-        'hide_closed': 'false',
+        'wallet_addresses': '0x23183f1c136f40bec7172652ccfd231b9d72f805',
+        'hide_abnormal': 'true',
+        'hide_closed': 'true',
         'hide_airdrop': 'true',
     }
 

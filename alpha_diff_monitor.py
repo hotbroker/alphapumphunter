@@ -53,7 +53,7 @@ except ImportError:
 
 # API URL
 ALPHA_AGG_TICKER_URL = "https://www.binance.com/bapi/defi/v1/public/alpha-trade/aggTicker24?dataType=aggregate"
-GMGN_BUY_URL = "https://gmgn.ai/mrtapi/v2/swap_batch_order?web_from_source=token_submit&trade_type=default&trade_index=0&trade_id=088fe68e6b85f225&device_id=1650b62d-4caf-4366-beae-ec64b2e89611&fp_did=5c6d41de35d26eaad98548f2c66762c8&client_id=gmgn_web_20260115-9926-24ba114&from_app=gmgn&app_ver=20260115-9926-24ba114&tz_name=Asia%2FShanghai&tz_offset=28800&app_lang=zh-CN&os=web&worker=0"
+GMGN_BUY_URL = "https://gmgn.ai/mrtapi/v2/swap_batch_order?web_from_source=token_submit&trade_type=default&trade_index=0&trade_id=47aff8b3544a6b8e&device_id=f58d99b1-6a60-4fc8-b181-e01a6fca2427&fp_did=5c6d41de35d26eaad98548f2c66762c8&client_id=gmgn_web_20260115-9909-b6161f8&from_app=gmgn&app_ver=20260115-9909-b6161f8&tz_name=Asia%2FShanghai&tz_offset=28800&app_lang=zh-CN&os=web&worker=0"
 
 # 配置
 MONITOR_INTERVAL = 1  # 监控间隔（秒）
@@ -62,36 +62,26 @@ MONITOR_INTERVAL = 1  # 监控间隔（秒）
 GMGN_HEADERS = {
     'accept': 'application/json, text/plain, */*',
     'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
-    'authorization': 'Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJnbWduLmFpL2FjY2VzcyIsImRhdGEiOnsidXNlcl9pZCI6ImU1MjdjYTJjLTdiYmMtNDU1Yy04MTNiLTE4ZmQzYzM1M2QxYSIsImNsaWVudF9pZCI6ImdtZ25fd2ViXzIwMjYwMTA2LTk1NzgtMDE5OGQ1NyIsImRldmljZV9pZCI6IjE2NTBiNjJkLTRjYWYtNDM2Ni1iZWFlLWVjNjRiMmU4OTYxMSIsImZhdGhlcl9pZCI6ImNjZDQwMTUzLWRjYTMtNDgzYS1hMmVjLTU2Zjk4ZTg1NDgwNiIsImZpbmdlcnByaW50IjoidjE2NDE1MDYwMjhhYzFlMWM0ZDBkNDA5M2MyOTFhNGE5NiIsImFwcCI6ImdtZ24iLCJwbGF0Zm9ybSI6IndlYiJ9LCJleHAiOjE3Njg1MDE4MjMsImlhdCI6MTc2ODUwMDAyMywiaXNzIjoiZ21nbi5haS9zaWduZXIiLCJqdGkiOiI5NjcwZTI4OC1kODU2LTQyNTMtODUwZi0zZmU5MWQwMWRhMjciLCJuYmYiOjE3Njg1MDAwMjMsInN1YiI6ImdtZ24uYWkvYWNjZXNzIiwidXNlcl9pZCI6ImU1MjdjYTJjLTdiYmMtNDU1Yy04MTNiLTE4ZmQzYzM1M2QxYSIsInZlciI6IjEuMCJ9.xiyNKGG-ibnlInxa9mHMJ05lKQBKR7OJ5DcvjRdqKdQM-v7BMUHmxMz3uDOvE45CoARAy0v5dJDwSQJx1beMYA',
+    'authorization': 'Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJnbWduLmFpL2FjY2VzcyIsImRhdGEiOnsidXNlcl9pZCI6IjY3YjM3YzIyLTQ2MDYtNDZmYy04NTNmLTM1YzIwOGY0NGEzNiIsImNsaWVudF9pZCI6ImdtZ25fd2ViXzIwMjYwMTE1LTk5MDktYjYxNjFmOCIsImRldmljZV9pZCI6ImY1OGQ5OWIxLTZhNjAtNGZjOC1iMTgxLWUwMWE2ZmNhMjQyNyIsImZhdGhlcl9pZCI6ImI0ZTdmMWFiLTgzMDgtNGY5ZC1iMjIwLTMwYzc4NGNhNmY5MSIsImZpbmdlcnByaW50IjoidjE2MTRmOWNlNGRlNjAxN2Y1NmNiMWNiOGRkM2JmMmQ1MCIsImFwcCI6ImdtZ24iLCJwbGF0Zm9ybSI6IndlYiJ9LCJleHAiOjE3Njg1MDgzOTgsImlhdCI6MTc2ODUwNjU5OCwiaXNzIjoiZ21nbi5haS9zaWduZXIiLCJqdGkiOiJmZjM3NGE2Mi1hNzdhLTRkYmItODZkMy03MGJkNzFkNzQ2ZTMiLCJuYmYiOjE3Njg1MDY1OTgsInN1YiI6ImdtZ24uYWkvYWNjZXNzIiwidXNlcl9pZCI6IjY3YjM3YzIyLTQ2MDYtNDZmYy04NTNmLTM1YzIwOGY0NGEzNiIsInZlciI6IjEuMCJ9.zdgxSe9qBRLKmOuugjSMThU61w_p-78ktKTilj8TOOxwM2Xrw1FdB_OFfiFW6FBZlv-9J9EXq6LntH0XV2twlg',
     'cache-control': 'no-cache',
     'content-type': 'application/json',
-    'pragma': 'no-cache',
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
 }
 
 GMGN_COOKIES = {
-        '_ga': 'GA1.1.421334895.1727329259',
-        'GMGN_LOCALE': 'zh-CN',
-        'GMGN_THEME': 'dark',
-        'GMGN_CHAIN': 'sol',
-        '_ga_0XM0LYXGC8': 'deleted',
-        'cf_clearance': 'gACJRZmlGc_8UJsIdeVyVV6tkogwuQ5AxkhX0m40Myc-1761628192-1.2.1.1-uiUKVGEPhDhOC9zb46Ccpz6KWI0b8Jx5fPpn1WC8yEYpNlIceMCi.HPur5qiU2VzuG1DaHGW5SHEzY1MbOjZuKaasz2go7s3ZzXPin9kvKIcLro2eJkzuhz.hp4djsKM8Vv803Ipf2gHitaGE.D1qA1uAL12RlDDKI9IpVQIbepwJF7MWw9.Iknn8hInj8tRx_8HDsOmgYnmYecgysxEr0w320vC1OkCBjAp7EyCiXk',
-        '__cf_bm': 'k3JGFK8zPu.A1us6fPbX8.h5IA0BIRzYPpewswe3JZI-1768494698-1.0.1.1-xmDJdqz6cz3vqoMuFysqIpjh6vTteOe6h8ENLbWm4RH1kj5W5vo3FcP82eYYPI_Q.EkvAxz2AhCzJJA0Tk7UjlsPb9aCoYOMS2Mq32lbZ6s',
-        'sid': 'gmgn%7C7e674587cb1640176169e211217dfab6',
-        '_ga_UGLVBMV4Z0': 'GS1.2.1768495378402796.8193cb66cf2330ab7378027e46aececc.e%2FngVKOn51yfo4K2INr8Lg%3D%3D.yZFGzlPV9ZlZGcP2pXLEzA%3D%3D.m8Noo0%2FaOhWOdGkP01QrZA%3D%3D.uOeJTTK2IV5KWn5o83ETaw%3D%3D',
-        '_ga_0XM0LYXGC8': 'GS2.1.s1768493470$o2408$g1$t1768495388$j50$l0$h0',
+ 
 }
 
 GMGN_PAR = {
     'web_from_source': 'token_submit',
     'trade_type': 'default',
     'trade_index': '0',
-    'trade_id': '6343c617402b594a',
-    'device_id': '1650b62d-4caf-4366-beae-ec64b2e89611',
+    'trade_id': '47aff8b3544a6b8e',
+    'device_id': 'f58d99b1-6a60-4fc8-b181-e01a6fca2427',
     'fp_did': '5c6d41de35d26eaad98548f2c66762c8',
-    'client_id': 'gmgn_web_20260115-9926-24ba114',
+    'client_id': 'gmgn_web_20260115-9909-b6161f8',
     'from_app': 'gmgn',
-    'app_ver': '20260115-9926-24ba114',
+    'app_ver': '20260115-9909-b6161f8',
     'tz_name': 'Asia/Shanghai',
     'tz_offset': '28800',
     'app_lang': 'zh-CN',
@@ -102,7 +92,7 @@ GMGN_PAR = {
 GMGN_BUY_PARAMS_TEMPLATE = {
     "token_in_chain": "bsc",
     "token_out_chain": "bsc",
-    "from_address": "0x8218a5246ea0b0eef2144352c599e8b39a764eeb",
+    "from_address": "0x23183f1c136f40bec7172652ccfd231b9d72f805",
     "token_in_address": "0x0000000000000000000000000000000000000000",
     "is_anti_mev": True,
     "anti_mev_mode": "off",
@@ -159,7 +149,7 @@ class AlphaDiffMonitor:
         self.buy_config = {
             "amount": 0.001,  # 默认 0.001
             "slippage": 10,
-            "address": "0x8218a5246ea0b0eef2144352c599e8b39a764eeb",
+            "address": "0xc224a406e712f5396f1c3dcc681313b03547a60f",
             "is_anti_mev": True
         }
     
@@ -356,8 +346,12 @@ class AlphaDiffMonitor:
         token_address = token_data.get('contractAddress', '').lower()
         symbol = token_data.get('symbol', 'Unknown')
         price = token_data.get('price', '0')
+        chainId = token_data.get('chainId', '0')
         
-        logger.info(f"💰 尝试在 GMGN 购买代币: {symbol} ({token_address})")
+        logger.info(f"💰 尝试在 GMGN 购买代币: {symbol} ({token_address}) chainId {chainId}")
+        if str(chainId)!='56':
+            logger.info(f"  {symbol} ({token_address}) 不是 BSC")
+            return
         onlineTge = token_data.get('onlineTge', True)
         onlineAirdrop = token_data.get('onlineAirdrop', True)      
         price = token_data.get('price', '0')
@@ -405,15 +399,17 @@ class AlphaDiffMonitor:
             
             # 使用同步客户端在线程中执行
             logger.info(f'Using Authorization: {current_headers.get("Authorization")[:30]}... {current_headers.get("Authorization")[-30:]}')
-
+            print(f'current_headers {current_headers}')
+            print(f'\n\nGMGN_PAR {GMGN_PAR}')
+            
             response = requests.post(
                 'https://gmgn.ai/mrtapi/v2/swap_batch_order',
                 params=GMGN_PAR,
                 headers=current_headers,
-                
                 json=payload
             )
-            response.raise_for_status()
+            
+            #response.raise_for_status()
             if response.status_code == 200:
                 data = response.json()
                 if data.get('code') == 0:
@@ -441,8 +437,8 @@ class AlphaDiffMonitor:
         chkcnt = 0
         current_tokens = await self.fetch_alpha_list()
         klinelife = '0x1a1e69f1e6182e2f8b9e8987e83c016ac9444444'
-        klinelife = '0x924fa68a0fc644485b8df8abfa0a41c2e7744444'
-        klinelife = '0x51e667e91b4b8cb8e6e0528757f248406bd34b57'
+        #klinelife = '0x924fa68a0fc644485b8df8abfa0a41c2e7744444'
+        #klinelife = '0x51e667e91b4b8cb8e6e0528757f248406bd34b57'
         butthistoken = current_tokens[klinelife]
         thread = threading.Thread(target=self.buy_token, args=(butthistoken,))
         thread.start()        
@@ -491,7 +487,7 @@ async def main():
     # GMGN 购买参数
     parser.add_argument("--amount", type=float, default=0.01, help="购买金额 (例如 0.01, 默认 0.01)")
     parser.add_argument("--slippage", type=int, default=10, help="滑点百分比 (默认 10)")
-    parser.add_argument("--address", type=str, default='0x8218a5246ea0b0eef2144352c599e8b39a764eeb', help="钱包地址")
+    parser.add_argument("--address", type=str, default='0xc224a406e712f5396f1c3dcc681313b03547a60f', help="钱包地址")
     parser.add_argument("--anti-mev", type=int, choices=[0, 1], default=1, help="是否开启 Anti-MEV (1开启, 0关闭, 默认开启)")
     
     args = parser.parse_args()

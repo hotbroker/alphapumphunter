@@ -440,8 +440,8 @@ class AlphaDiffMonitor:
         #klinelife = '0x924fa68a0fc644485b8df8abfa0a41c2e7744444'
         #klinelife = '0x51e667e91b4b8cb8e6e0528757f248406bd34b57'
         butthistoken = current_tokens[klinelife]
-        thread = threading.Thread(target=self.buy_token, args=(butthistoken,))
-        thread.start()        
+        # thread = threading.Thread(target=self.buy_token, args=(butthistoken,))
+        # thread.start()        
         # tokenlist = range(10)
         # for token_address in tokenlist:
         #     thread = threading.Thread(target=self.buy_token, args=(token_address,))

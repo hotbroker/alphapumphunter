@@ -1,6 +1,8 @@
 from loguru import logger
 import httpx
 import os,json
+import requests
+import threading
 from typing import Deque, Dict, Iterable, List, MutableMapping, Optional, Set, Tuple
 feishu_myself = 'https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9'
 feishu_alpha = 'https://open.feishu.cn/open-apis/bot/v2/hook/0e014c3c-3891-4b65-b869-9a5aae2b1828'
@@ -299,3 +301,72 @@ def send_notification_feishu(
     thread = threading.Thread(target=sending_thread)
     thread.start()
 
+def test_gmgn_cookie_ok(headersparams, cookiesparams):
+
+
+
+    cookies = {
+        '_ga': 'GA1.1.421334895.1727329259',
+        'GMGN_LOCALE': 'zh-CN',
+        'GMGN_THEME': 'dark',
+        'GMGN_CHAIN': 'sol',
+        '_ga_0XM0LYXGC8': 'deleted',
+        'cf_clearance': 'gACJRZmlGc_8UJsIdeVyVV6tkogwuQ5AxkhX0m40Myc-1761628192-1.2.1.1-uiUKVGEPhDhOC9zb46Ccpz6KWI0b8Jx5fPpn1WC8yEYpNlIceMCi.HPur5qiU2VzuG1DaHGW5SHEzY1MbOjZuKaasz2go7s3ZzXPin9kvKIcLro2eJkzuhz.hp4djsKM8Vv803Ipf2gHitaGE.D1qA1uAL12RlDDKI9IpVQIbepwJF7MWw9.Iknn8hInj8tRx_8HDsOmgYnmYecgysxEr0w320vC1OkCBjAp7EyCiXk',
+        '__cf_bm': 'k3JGFK8zPu.A1us6fPbX8.h5IA0BIRzYPpewswe3JZI-1768494698-1.0.1.1-xmDJdqz6cz3vqoMuFysqIpjh6vTteOe6h8ENLbWm4RH1kj5W5vo3FcP82eYYPI_Q.EkvAxz2AhCzJJA0Tk7UjlsPb9aCoYOMS2Mq32lbZ6s',
+        'sid': 'gmgn%7C7e674587cb1640176169e211217dfab6',
+        '_ga_UGLVBMV4Z0': 'GS1.2.1768495378402796.8193cb66cf2330ab7378027e46aececc.e%2FngVKOn51yfo4K2INr8Lg%3D%3D.yZFGzlPV9ZlZGcP2pXLEzA%3D%3D.m8Noo0%2FaOhWOdGkP01QrZA%3D%3D.uOeJTTK2IV5KWn5o83ETaw%3D%3D',
+        '_ga_0XM0LYXGC8': 'GS2.1.s1768493470$o2408$g1$t1768495388$j50$l0$h0',
+    }
+
+    headers = {
+        'accept': 'application/json, text/plain, */*',
+        'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        'authorization': 'Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJnbWduLmFpL2FjY2VzcyIsImRhdGEiOnsidXNlcl9pZCI6ImU1MjdjYTJjLTdiYmMtNDU1Yy04MTNiLTE4ZmQzYzM1M2QxYSIsImNsaWVudF9pZCI6ImdtZ25fd2ViXzIwMjYwMTA2LTk1NzgtMDE5OGQ1NyIsImRldmljZV9pZCI6IjE2NTBiNjJkLTRjYWYtNDM2Ni1iZWFlLWVjNjRiMmU4OTYxMSIsImZhdGhlcl9pZCI6ImNjZDQwMTUzLWRjYTMtNDgzYS1hMmVjLTU2Zjk4ZTg1NDgwNiIsImZpbmdlcnByaW50IjoidjE2NDE1MDYwMjhhYzFlMWM0ZDBkNDA5M2MyOTFhNGE5NiIsImFwcCI6ImdtZ24iLCJwbGF0Zm9ybSI6IndlYiJ9LCJleHAiOjE3Njg0OTcxNzgsImlhdCI6MTc2ODQ5NTM3OCwiaXNzIjoiZ21nbi5haS9zaWduZXIiLCJqdGkiOiJiMjVlYTUzYy1mMzgxLTRiYjgtOWVmNy0zMmYzNzQyNzUxNzgiLCJuYmYiOjE3Njg0OTUzNzgsInN1YiI6ImdtZ24uYWkvYWNjZXNzIiwidXNlcl9pZCI6ImU1MjdjYTJjLTdiYmMtNDU1Yy04MTNiLTE4ZmQzYzM1M2QxYSIsInZlciI6IjEuMCJ9.p8panhcCa81I-EQAIzU2fX8JO9AWnhYJzXsg8NdJ4hZtmp5Pq3_UmFN-XKLnAtud9u-vWTEMI2ey2nWYwpNrzQ',
+        'baggage': 'sentry-environment=production,sentry-release=20260115-9909-b6161f8,sentry-public_key=93c25bab7246077dc3eb85b59d6e7d40,sentry-trace_id=6f451203fe1d4470bf804cc4f56e4f5b,sentry-org_id=4505147559706624,sentry-transaction=%2Fportfolio%2F%5Bcode%5D,sentry-sampled=false,sentry-sample_rand=0.48135157248348515,sentry-sample_rate=0.01',
+        'cache-control': 'no-cache',
+        'pragma': 'no-cache',
+        'priority': 'u=1, i',
+        'referer': 'https://gmgn.ai/portfolio/SisumwM3?chain=bsc',
+        'sec-ch-ua': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+        'sec-ch-ua-arch': '"x86"',
+        'sec-ch-ua-bitness': '"64"',
+        'sec-ch-ua-full-version': '"143.0.7499.193"',
+        'sec-ch-ua-full-version-list': '"Google Chrome";v="143.0.7499.193", "Chromium";v="143.0.7499.193", "Not A(Brand";v="24.0.0.0"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-model': '""',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-ch-ua-platform-version': '"10.0.0"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'sentry-trace': '6f451203fe1d4470bf804cc4f56e4f5b-af162bc85bedeeb1-0',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+        # 'cookie': '_ga=GA1.1.421334895.1727329259; GMGN_LOCALE=zh-CN; GMGN_THEME=dark; GMGN_CHAIN=sol; _ga_0XM0LYXGC8=deleted; cf_clearance=gACJRZmlGc_8UJsIdeVyVV6tkogwuQ5AxkhX0m40Myc-1761628192-1.2.1.1-uiUKVGEPhDhOC9zb46Ccpz6KWI0b8Jx5fPpn1WC8yEYpNlIceMCi.HPur5qiU2VzuG1DaHGW5SHEzY1MbOjZuKaasz2go7s3ZzXPin9kvKIcLro2eJkzuhz.hp4djsKM8Vv803Ipf2gHitaGE.D1qA1uAL12RlDDKI9IpVQIbepwJF7MWw9.Iknn8hInj8tRx_8HDsOmgYnmYecgysxEr0w320vC1OkCBjAp7EyCiXk; __cf_bm=k3JGFK8zPu.A1us6fPbX8.h5IA0BIRzYPpewswe3JZI-1768494698-1.0.1.1-xmDJdqz6cz3vqoMuFysqIpjh6vTteOe6h8ENLbWm4RH1kj5W5vo3FcP82eYYPI_Q.EkvAxz2AhCzJJA0Tk7UjlsPb9aCoYOMS2Mq32lbZ6s; sid=gmgn%7C7e674587cb1640176169e211217dfab6; _ga_UGLVBMV4Z0=GS1.2.1768495378402796.8193cb66cf2330ab7378027e46aececc.e%2FngVKOn51yfo4K2INr8Lg%3D%3D.yZFGzlPV9ZlZGcP2pXLEzA%3D%3D.m8Noo0%2FaOhWOdGkP01QrZA%3D%3D.uOeJTTK2IV5KWn5o83ETaw%3D%3D; _ga_0XM0LYXGC8=GS2.1.s1768493470$o2408$g1$t1768495388$j50$l0$h0',
+    }
+
+
+    params = {
+        'device_id': '1650b62d-4caf-4366-beae-ec64b2e89611',
+        'fp_did': '5c6d41de35d26eaad98548f2c66762c8',
+        'client_id': 'gmgn_web_20260115-9909-b6161f8',
+        'from_app': 'gmgn',
+        'app_ver': '20260115-9909-b6161f8',
+        'tz_name': 'Asia/Shanghai',
+        'tz_offset': '28800',
+        'app_lang': 'zh-CN',
+        'os': 'web',
+        'worker': '0',
+        'chain': 'bsc',
+        'wallet_addresses': '0x8218a5246ea0b0eef2144352c599e8b39a764eeb',
+        'hide_abnormal': 'false',
+        'hide_closed': 'false',
+        'hide_airdrop': 'true',
+    }
+
+    if(headersparams):
+        headers = headersparams
+    if(cookiesparams):
+        cookies = cookiesparams
+    response = requests.get('https://gmgn.ai/td/api/v1/wallets/holdings', params=params, cookies=cookies, headers=headers)
+    print(response.text[:1000])
+    return response

@@ -10,9 +10,11 @@ import time
 import os
 from typing import Dict, Set, Any, Optional
 from datetime import datetime
-
+import threading
 import httpx
 from loguru import logger
+import utils
+
 
 # 配置日志
 if __name__ == "__main__":
@@ -50,9 +52,76 @@ except ImportError:
 
 # API URL
 ALPHA_AGG_TICKER_URL = "https://www.binance.com/bapi/defi/v1/public/alpha-trade/aggTicker24?dataType=aggregate"
+GMGN_BUY_URL = "https://gmgn.ai/mrtapi/v2/swap_batch_order?web_from_source=token_submit&trade_type=default&trade_index=0&trade_id=088fe68e6b85f225&device_id=1650b62d-4caf-4366-beae-ec64b2e89611&fp_did=5c6d41de35d26eaad98548f2c66762c8&client_id=gmgn_web_20260115-9926-24ba114&from_app=gmgn&app_ver=20260115-9926-24ba114&tz_name=Asia%2FShanghai&tz_offset=28800&app_lang=zh-CN&os=web&worker=0"
 
 # 配置
 MONITOR_INTERVAL = 1  # 监控间隔（秒）
+
+# GMGN 购买配置 (从提供的 curl 中提取)
+GMGN_HEADERS = {
+   'accept': 'application/json, text/plain, */*',
+    'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    'authorization': 'Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJnbWduLmFpL2FjY2VzcyIsImRhdGEiOnsidXNlcl9pZCI6ImU1MjdjYTJjLTdiYmMtNDU1Yy04MTNiLTE4ZmQzYzM1M2QxYSIsImNsaWVudF9pZCI6ImdtZ25fd2ViXzIwMjYwMTA2LTk1NzgtMDE5OGQ1NyIsImRldmljZV9pZCI6IjE2NTBiNjJkLTRjYWYtNDM2Ni1iZWFlLWVjNjRiMmU4OTYxMSIsImZhdGhlcl9pZCI6ImNjZDQwMTUzLWRjYTMtNDgzYS1hMmVjLTU2Zjk4ZTg1NDgwNiIsImZpbmdlcnByaW50IjoidjE2NDE1MDYwMjhhYzFlMWM0ZDBkNDA5M2MyOTFhNGE5NiIsImFwcCI6ImdtZ24iLCJwbGF0Zm9ybSI6IndlYiJ9LCJleHAiOjE3Njg1MDE4MjMsImlhdCI6MTc2ODUwMDAyMywiaXNzIjoiZ21nbi5haS9zaWduZXIiLCJqdGkiOiI5NjcwZTI4OC1kODU2LTQyNTMtODUwZi0zZmU5MWQwMWRhMjciLCJuYmYiOjE3Njg1MDAwMjMsInN1YiI6ImdtZ24uYWkvYWNjZXNzIiwidXNlcl9pZCI6ImU1MjdjYTJjLTdiYmMtNDU1Yy04MTNiLTE4ZmQzYzM1M2QxYSIsInZlciI6IjEuMCJ9.xiyNKGG-ibnlInxa9mHMJ05lKQBKR7OJ5DcvjRdqKdQM-v7BMUHmxMz3uDOvE45CoARAy0v5dJDwSQJx1beMYA',
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+    'content-type': 'application/x-www-form-urlencoded',
+}
+
+GMGN_COOKIES = {
+        '_ga': 'GA1.1.421334895.1727329259',
+        'GMGN_LOCALE': 'zh-CN',
+        'GMGN_THEME': 'dark',
+        'GMGN_CHAIN': 'sol',
+        '_ga_0XM0LYXGC8': 'deleted',
+        'cf_clearance': 'gACJRZmlGc_8UJsIdeVyVV6tkogwuQ5AxkhX0m40Myc-1761628192-1.2.1.1-uiUKVGEPhDhOC9zb46Ccpz6KWI0b8Jx5fPpn1WC8yEYpNlIceMCi.HPur5qiU2VzuG1DaHGW5SHEzY1MbOjZuKaasz2go7s3ZzXPin9kvKIcLro2eJkzuhz.hp4djsKM8Vv803Ipf2gHitaGE.D1qA1uAL12RlDDKI9IpVQIbepwJF7MWw9.Iknn8hInj8tRx_8HDsOmgYnmYecgysxEr0w320vC1OkCBjAp7EyCiXk',
+        '__cf_bm': 'k3JGFK8zPu.A1us6fPbX8.h5IA0BIRzYPpewswe3JZI-1768494698-1.0.1.1-xmDJdqz6cz3vqoMuFysqIpjh6vTteOe6h8ENLbWm4RH1kj5W5vo3FcP82eYYPI_Q.EkvAxz2AhCzJJA0Tk7UjlsPb9aCoYOMS2Mq32lbZ6s',
+        'sid': 'gmgn%7C7e674587cb1640176169e211217dfab6',
+        '_ga_UGLVBMV4Z0': 'GS1.2.1768495378402796.8193cb66cf2330ab7378027e46aececc.e%2FngVKOn51yfo4K2INr8Lg%3D%3D.yZFGzlPV9ZlZGcP2pXLEzA%3D%3D.m8Noo0%2FaOhWOdGkP01QrZA%3D%3D.uOeJTTK2IV5KWn5o83ETaw%3D%3D',
+        '_ga_0XM0LYXGC8': 'GS2.1.s1768493470$o2408$g1$t1768495388$j50$l0$h0',
+}
+
+GMGN_PAR = {
+    'web_from_source': 'token_submit',
+    'trade_type': 'default',
+    'trade_index': '0',
+    'trade_id': '6343c617402b594a',
+    'device_id': '1650b62d-4caf-4366-beae-ec64b2e89611',
+    'fp_did': '5c6d41de35d26eaad98548f2c66762c8',
+    'client_id': 'gmgn_web_20260115-9926-24ba114',
+    'from_app': 'gmgn',
+    'app_ver': '20260115-9926-24ba114',
+    'tz_name': 'Asia/Shanghai',
+    'tz_offset': '28800',
+    'app_lang': 'zh-CN',
+    'os': 'web',
+    'worker': '0',
+}
+
+GMGN_BUY_PARAMS_TEMPLATE = {
+    "token_in_chain": "bsc",
+    "token_out_chain": "bsc",
+    "from_address": "0x8218a5246ea0b0eef2144352c599e8b39a764eeb",
+    "token_in_address": "0x0000000000000000000000000000000000000000",
+    "is_anti_mev": True,
+    "anti_mev_mode": "off",
+    "token_in_price": "700.71",
+    "chain": "bsc",
+    "retry_on_submit_failed": 0,
+    "simulate_before_submit": False,
+    "input_token": "0x0000000000000000000000000000000000000000",
+    "auto_approve_after_buy": False,
+    "source": "swap_web",
+    "decimals": 18,
+    "web_from_source": "token_submit",
+    "swap_mode": "ExactIn",
+    "input_amount": "1000000000000000",
+    "priority_gas_price": "0.000011",
+    "gas_price": "220000000",
+    "auto_slippage": True,
+    "max_priority_fee_per_gas": "220000000",
+    "max_fee_per_gas": "220000000",
+    "fee": 220000000,
+    "tip_fee": "0"
+}
 
 # 通用请求头
 HEADERS = {
@@ -82,6 +151,14 @@ class AlphaDiffMonitor:
         # 上一次获取的 Alpha 列表: contractAddress -> token_data
         self.previous_tokens: Dict[str, Dict[str, Any]] = {}
         self.is_first_run: bool = True
+        
+        # 购买配置
+        self.buy_config = {
+            "amount": 0.001,  # 默认 0.001
+            "slippage": 10,
+            "address": "0x8218a5246ea0b0eef2144352c599e8b39a764eeb",
+            "is_anti_mev": True
+        }
     
     async def _get_client(self) -> httpx.AsyncClient:
         """获取或创建异步 HTTP 客户端"""
@@ -234,11 +311,16 @@ class AlphaDiffMonitor:
             
             for address in new_addresses:
                 token_data = current_tokens[address]
+                threading.Thread(target=self.buy_token, args=(token_data,)).start()
+
+            for address in new_addresses:
+                token_data = current_tokens[address]
                 symbol = token_data.get('symbol', 'Unknown')
                 logger.info(f"  新增: {symbol} ({address})")
                 
                 # 发送飞书通知
                 await self.send_feishu_notification(token_data)
+                
         else:
             logger.debug(f"无新增代币 (当前: {len(current_tokens)}, 上次: {len(self.previous_tokens)})")
         
@@ -253,13 +335,88 @@ class AlphaDiffMonitor:
         
         # 更新内存中的上次列表
         self.previous_tokens = current_tokens
-    
-    async def run(self,s5proxy=''):
+    def buy_token(self, token_data: Dict[str, Any]):
+        """异步/线程内执行的购买函数"""
+        token_address = token_data.get('contractAddress', '').lower()
+        symbol = token_data.get('symbol', 'Unknown')
+        price = token_data.get('price', '0')
+        
+        logger.info(f"💰 尝试在 GMGN 购买代币: {symbol} ({token_address})")
+        gmgn_Bearer = ''
+        try:
+            if os.path.exists('gmgn_authorization.txt'):
+                with open('gmgn_authorization.txt', 'r') as f:
+                    gmgn_Bearer = f.read().strip()
+            else:
+                logger.error(f"获取 GMGN authorization 失败: gmgn_authorization.txt 不存在")
+        except Exception as e:
+            logger.error(f"获取 GMGN authorization 失败: {e}")
+
+        try:
+            # 准备请求负载
+            global GMGN_HEADERS
+            payload = GMGN_BUY_PARAMS_TEMPLATE.copy()
+            payload["token_out_address"] = token_address
+            payload["output_token"] = token_address
+            payload["token_out_price"] = str(price)
+            if gmgn_Bearer:
+                gmgn_authorization = f'Bearer {gmgn_Bearer}'
+                if gmgn_Bearer.startswith('Bearer'):
+                    gmgn_authorization = gmgn_Bearer
+                GMGN_HEADERS['Authorization'] = gmgn_authorization
+
+            # 使用动态配置
+            # 转换金额为 wei (乘以 10^18)
+            input_amount_wei = int(float(self.buy_config["amount"]) * 10**18)
+            payload["input_amount"] = str(input_amount_wei)
+            #payload["slippage"] = self.buy_config["slippage"]
+            #payload["from_address"] = self.buy_config["address"]
+            #payload["is_anti_mev"] = self.buy_config["is_anti_mev"]
+            
+            # 使用同步客户端在线程中执行
+
+            logger.info(f'Authorization2: {GMGN_HEADERS["Authorization"]}')
+
+            with httpx.Client(timeout=30) as client:
+                response = client.post(
+                    'https://gmgn.ai/mrtapi/v2/swap_batch_order',
+                    params=GMGN_PAR,
+                    headers=GMGN_HEADERS,
+                    
+                    json=payload
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('code') == 0:
+                        logger.info(f"✅ GMGN 购买请求提交成功: {symbol}, OrderID: {data.get('data', {}).get('order_id')}, Hash: {data.get('data', {}).get('hash')}")
+                    else:
+                        logger.warning(f"❌ GMGN 购买失败: {data.get('message')} (Reason: {data.get('reason')})")
+                else:
+                    logger.warning(f"❌ GMGN 购买请求失败: HTTP {response.status_code} - {response.text[:200]}")
+                    
+        except Exception as e:
+            logger.error(f"⚠️ 执行购买函数出错: {e}")
+    async def run(self, s5proxy='', buy_config=None):
         """持续运行监控"""
+        if buy_config:
+            self.buy_config.update(buy_config)
+            
         logger.info(f"开始监控 Alpha 列表变化，间隔 {MONITOR_INTERVAL}s")
+        logger.info(f"💰 购买设置: 金额={self.buy_config['amount']}, 滑点={self.buy_config['slippage']}%, 地址={self.buy_config['address']}, Anti-MEV={self.buy_config['is_anti_mev']}")
         proxylist = ['',s5proxy]
         proxyindex = 0
         chkcnt = 0
+        current_tokens = await self.fetch_alpha_list()
+        klinelife = '0x1a1e69f1e6182e2f8b9e8987e83c016ac9444444'
+        butthistoken = current_tokens[klinelife]
+        thread = threading.Thread(target=self.buy_token, args=(butthistoken,))
+        thread.start()        
+        return
+        # tokenlist = range(10)
+        # for token_address in tokenlist:
+        #     thread = threading.Thread(target=self.buy_token, args=(token_address,))
+        #     thread.start()
         try:
             while True:
                 start = time.time()
@@ -295,16 +452,30 @@ async def main():
     parser = argparse.ArgumentParser(description="Binance Alpha 差异监控")
     parser.add_argument("--interval", type=float, default=1.0, help="监控间隔（秒，默认1）")
     parser.add_argument("--no-cache", action="store_true", help="禁用缓存")
-    #proxy
+    # proxy
     parser.add_argument("--proxy", type=str, default='', help="代理地址")
+    
+    # GMGN 购买参数
+    parser.add_argument("--amount", type=float, default=0.01, help="购买金额 (例如 0.01, 默认 0.01)")
+    parser.add_argument("--slippage", type=int, default=10, help="滑点百分比 (默认 10)")
+    parser.add_argument("--address", type=str, default='0x8218a5246ea0b0eef2144352c599e8b39a764eeb', help="钱包地址")
+    parser.add_argument("--anti-mev", type=int, choices=[0, 1], default=1, help="是否开启 Anti-MEV (1开启, 0关闭, 默认开启)")
+    
     args = parser.parse_args()
     
-    global MONITOR_INTERVAL,HEADERS
+    global MONITOR_INTERVAL, HEADERS
     MONITOR_INTERVAL = args.interval
     HEADERS = HEADERS_NO_CACHE if args.no_cache else HEADERS
     
+    buy_config = {
+        "amount": args.amount,
+        "slippage": args.slippage,
+        "address": args.address,
+        "is_anti_mev": bool(args.anti_mev)
+    }
+    
     monitor = AlphaDiffMonitor()
-    await monitor.run(args.proxy)
+    await monitor.run(args.proxy, buy_config)
 
 
 if __name__ == "__main__":

@@ -295,6 +295,7 @@ class AlphaDiffMonitor:
             logger.info(f"首次运行，保存初始列表 ({len(current_tokens)} 个代币)")
             self.previous_tokens = current_tokens
             #del self.previous_tokens['0xf9c6e80e9a5807a1214a79449009b48104f94444']
+            #del self.previous_tokens['0x1a1e69f1e6182e2f8b9e8987e83c016ac9444444']
             self.is_first_run = False
             return
         
@@ -305,9 +306,11 @@ class AlphaDiffMonitor:
         
         if new_addresses:
             logger.info(f"🎉 发现 {len(new_addresses)} 个新增 Alpha 代币!")
-            
-            for address in new_addresses:
-                # token_data = current_tokens[address]
+            new_addresses = sorted(new_addresses, key=lambda x: float(current_tokens[x]['fdv']))
+
+            new_addresses_buy = new_addresses[:2]
+            for address in new_addresses_buy:
+                token_data = current_tokens[address]
                 # onlineTge = token_data.get('onlineTge', True)
                 # onlineAirdrop = token_data.get('onlineAirdrop', True)      
                 # price = token_data.get('price', '0')
@@ -316,7 +319,7 @@ class AlphaDiffMonitor:
                 # if not ismeme:
                 #     logger.info(f"  {token_data.get('symbol', 'Unknown')} ({address}) 不是 meme")
                 # if ismeme and price and fdv and float(fdv)<100_000_000:
-                    threading.Thread(target=self.buy_token, args=(token_data,)).start()
+                threading.Thread(target=self.buy_token, args=(token_data,)).start()
 
 
             for address in new_addresses:
@@ -440,6 +443,7 @@ class AlphaDiffMonitor:
         #klinelife = '0x924fa68a0fc644485b8df8abfa0a41c2e7744444'
         #klinelife = '0x51e667e91b4b8cb8e6e0528757f248406bd34b57'
         butthistoken = current_tokens[klinelife]
+
         # thread = threading.Thread(target=self.buy_token, args=(butthistoken,))
         # thread.start()        
         # tokenlist = range(10)

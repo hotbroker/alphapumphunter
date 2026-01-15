@@ -132,11 +132,14 @@ class AlphaDiffMonitor:
             listing_time_str = time_to_string(listing_time / 1000) if listing_time else ''
             
             hot_tag = "🔥 热门" if token_data.get('hotTag') else ""
+            ismeme = True if price else False    
+            if not price:
+                price = '0'
             
             msg_lines = [
-                f"🚀🚀🚀 Alpha 新增代币!",
+                f"🚀🚀🚀 Alpha 新增代币! {symbol}",
                 f"",
-                f"📌 基本信息:",
+                f"📌 基本信息(ismeme: {ismeme}):",
                 f"  符号: {symbol}",
                 f"  名称: {name}",
                 f"  Alpha ID: {alpha_id}" if alpha_id else "",

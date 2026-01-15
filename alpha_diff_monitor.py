@@ -14,6 +14,7 @@ import threading
 import httpx
 from loguru import logger
 import utils
+import requests
 
 
 # 配置日志
@@ -59,11 +60,13 @@ MONITOR_INTERVAL = 1  # 监控间隔（秒）
 
 # GMGN 购买配置 (从提供的 curl 中提取)
 GMGN_HEADERS = {
-   'accept': 'application/json, text/plain, */*',
+    'accept': 'application/json, text/plain, */*',
     'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
     'authorization': 'Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJnbWduLmFpL2FjY2VzcyIsImRhdGEiOnsidXNlcl9pZCI6ImU1MjdjYTJjLTdiYmMtNDU1Yy04MTNiLTE4ZmQzYzM1M2QxYSIsImNsaWVudF9pZCI6ImdtZ25fd2ViXzIwMjYwMTA2LTk1NzgtMDE5OGQ1NyIsImRldmljZV9pZCI6IjE2NTBiNjJkLTRjYWYtNDM2Ni1iZWFlLWVjNjRiMmU4OTYxMSIsImZhdGhlcl9pZCI6ImNjZDQwMTUzLWRjYTMtNDgzYS1hMmVjLTU2Zjk4ZTg1NDgwNiIsImZpbmdlcnByaW50IjoidjE2NDE1MDYwMjhhYzFlMWM0ZDBkNDA5M2MyOTFhNGE5NiIsImFwcCI6ImdtZ24iLCJwbGF0Zm9ybSI6IndlYiJ9LCJleHAiOjE3Njg1MDE4MjMsImlhdCI6MTc2ODUwMDAyMywiaXNzIjoiZ21nbi5haS9zaWduZXIiLCJqdGkiOiI5NjcwZTI4OC1kODU2LTQyNTMtODUwZi0zZmU5MWQwMWRhMjciLCJuYmYiOjE3Njg1MDAwMjMsInN1YiI6ImdtZ24uYWkvYWNjZXNzIiwidXNlcl9pZCI6ImU1MjdjYTJjLTdiYmMtNDU1Yy04MTNiLTE4ZmQzYzM1M2QxYSIsInZlciI6IjEuMCJ9.xiyNKGG-ibnlInxa9mHMJ05lKQBKR7OJ5DcvjRdqKdQM-v7BMUHmxMz3uDOvE45CoARAy0v5dJDwSQJx1beMYA',
+    'cache-control': 'no-cache',
+    'content-type': 'application/json',
+    'pragma': 'no-cache',
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-    'content-type': 'application/x-www-form-urlencoded',
 }
 
 GMGN_COOKIES = {
@@ -228,6 +231,8 @@ class AlphaDiffMonitor:
             
             listing_time = token_data.get('listingTime', 0)
             listing_time_str = time_to_string(listing_time / 1000) if listing_time else ''
+            onlineTge = token_data.get('onlineTge', True)
+            onlineAirdrop = token_data.get('onlineAirdrop', True)
             
             hot_tag = "🔥 热门" if token_data.get('hotTag') else ""
             ismeme = True if price else False    
@@ -258,6 +263,8 @@ class AlphaDiffMonitor:
                 f"  流动性: ${format_big_number(float(liquidity))}",
                 f"  市值: ${format_big_number(float(market_cap))}",
                 f"  FDV: ${format_big_number(float(fdv))}",
+                f"  TGE: {onlineTge}",
+                f"  Airdrop: {onlineAirdrop}",
                 f"",
                 f"👥 持有者: {holders}",
                 f"💰 总供应量: {format_big_number(float(total_supply))}",
@@ -310,8 +317,17 @@ class AlphaDiffMonitor:
             logger.info(f"🎉 发现 {len(new_addresses)} 个新增 Alpha 代币!")
             
             for address in new_addresses:
-                token_data = current_tokens[address]
-                threading.Thread(target=self.buy_token, args=(token_data,)).start()
+                # token_data = current_tokens[address]
+                # onlineTge = token_data.get('onlineTge', True)
+                # onlineAirdrop = token_data.get('onlineAirdrop', True)      
+                # price = token_data.get('price', '0')
+                # fdv = token_data.get('fdv', '0')
+                # ismeme = onlineTge==False and onlineAirdrop==False
+                # if not ismeme:
+                #     logger.info(f"  {token_data.get('symbol', 'Unknown')} ({address}) 不是 meme")
+                # if ismeme and price and fdv and float(fdv)<100_000_000:
+                    threading.Thread(target=self.buy_token, args=(token_data,)).start()
+
 
             for address in new_addresses:
                 token_data = current_tokens[address]
@@ -342,6 +358,20 @@ class AlphaDiffMonitor:
         price = token_data.get('price', '0')
         
         logger.info(f"💰 尝试在 GMGN 购买代币: {symbol} ({token_address})")
+        onlineTge = token_data.get('onlineTge', True)
+        onlineAirdrop = token_data.get('onlineAirdrop', True)      
+        price = token_data.get('price', '0')
+        fdv = token_data.get('fdv', '0')
+        ismeme = onlineTge==False and onlineAirdrop==False
+        if not ismeme:
+            logger.info(f"  {symbol} ({token_address}) 不是 meme")
+            return
+        if ismeme and price and fdv and float(fdv)<100_000_000:
+            pass
+        else:
+            logger.info(f"  {symbol} ({token_address}) 不满足购买条件")
+            return
+                    
         gmgn_Bearer = ''
         try:
             if os.path.exists('gmgn_authorization.txt'):
@@ -354,7 +384,7 @@ class AlphaDiffMonitor:
 
         try:
             # 准备请求负载
-            global GMGN_HEADERS
+            current_headers = GMGN_HEADERS.copy()
             payload = GMGN_BUY_PARAMS_TEMPLATE.copy()
             payload["token_out_address"] = token_address
             payload["output_token"] = token_address
@@ -363,7 +393,7 @@ class AlphaDiffMonitor:
                 gmgn_authorization = f'Bearer {gmgn_Bearer}'
                 if gmgn_Bearer.startswith('Bearer'):
                     gmgn_authorization = gmgn_Bearer
-                GMGN_HEADERS['Authorization'] = gmgn_authorization
+                current_headers['Authorization'] = gmgn_authorization
 
             # 使用动态配置
             # 转换金额为 wei (乘以 10^18)
@@ -374,27 +404,25 @@ class AlphaDiffMonitor:
             #payload["is_anti_mev"] = self.buy_config["is_anti_mev"]
             
             # 使用同步客户端在线程中执行
+            logger.info(f'Using Authorization: {current_headers.get("Authorization")[:30]}... {current_headers.get("Authorization")[-30:]}')
 
-            logger.info(f'Authorization2: {GMGN_HEADERS["Authorization"]}')
-
-            with httpx.Client(timeout=30) as client:
-                response = client.post(
-                    'https://gmgn.ai/mrtapi/v2/swap_batch_order',
-                    params=GMGN_PAR,
-                    headers=GMGN_HEADERS,
-                    
-                    json=payload
-                )
+            response = requests.post(
+                'https://gmgn.ai/mrtapi/v2/swap_batch_order',
+                params=GMGN_PAR,
+                headers=current_headers,
                 
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get('code') == 0:
-                        logger.info(f"✅ GMGN 购买请求提交成功: {symbol}, OrderID: {data.get('data', {}).get('order_id')}, Hash: {data.get('data', {}).get('hash')}")
-                    else:
-                        logger.warning(f"❌ GMGN 购买失败: {data.get('message')} (Reason: {data.get('reason')})")
+                json=payload
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('code') == 0:
+                    logger.info(f"✅ GMGN 购买请求提交成功: {symbol}, OrderID: {data.get('data', {}).get('order_id')}, Hash: {data.get('data', {}).get('hash')}")
                 else:
-                    logger.warning(f"❌ GMGN 购买请求失败: HTTP {response.status_code} - {response.text[:200]}")
-                    
+                    logger.warning(f"❌ GMGN 购买失败: {data.get('message')} (Reason: {data.get('reason')})")
+            else:
+                logger.warning(f"❌ GMGN 购买请求失败: HTTP {response.status_code} - {response.text[:200]}")
+                
         except Exception as e:
             logger.error(f"⚠️ 执行购买函数出错: {e}")
     async def run(self, s5proxy='', buy_config=None):
@@ -409,10 +437,12 @@ class AlphaDiffMonitor:
         chkcnt = 0
         current_tokens = await self.fetch_alpha_list()
         klinelife = '0x1a1e69f1e6182e2f8b9e8987e83c016ac9444444'
+        klinelife = '0x924fa68a0fc644485b8df8abfa0a41c2e7744444'
+        klinelife = '0x51e667e91b4b8cb8e6e0528757f248406bd34b57'
         butthistoken = current_tokens[klinelife]
         thread = threading.Thread(target=self.buy_token, args=(butthistoken,))
         thread.start()        
-        return
+        
         # tokenlist = range(10)
         # for token_address in tokenlist:
         #     thread = threading.Thread(target=self.buy_token, args=(token_address,))

@@ -240,7 +240,7 @@ class AlphaDiffMonitor:
                 f"📌 基本信息(ismeme: {ismeme}):",
                 f"  符号: {symbol}",
                 f"  名称: {name}",
-                f"  Alpha ID: {alpha_id}" if alpha_id else "",
+                #f"  Alpha ID: {alpha_id}" if alpha_id else "",
                 f"  链: {chain_name} ({chain_id})",
                 f"  合约: {contract_address}",
                 f"  上线时间: {listing_time_str}" if listing_time_str else "",
@@ -274,7 +274,7 @@ class AlphaDiffMonitor:
             response = await client.post(feishu_alpha_new_list, json=feishu_data)
             
             if response.status_code == 200:
-                logger.info(f"飞书通知发送成功: {symbol}")
+                logger.info(f"飞书通知发送成功: {symbol} text:{response.text}")
             else:
                 logger.warning(f"飞书通知发送失败: {response.status_code} - {response.text[:200]}")
                 

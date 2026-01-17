@@ -114,9 +114,9 @@ def checktoken():
     except Exception as e:
         print(e)
         utils.send_notification_feishu(utils.feishu_myself,f'checktoken test gmgn error:{e}', 'test_gmgn_cookie_ok')
+while 1:    
+    try:
     
-try:
-    while 1:
         checktoken()
         with open('gmgn_authorization.txt', 'r') as f:
             gmgn_Bearer = f.read().strip()
@@ -130,6 +130,7 @@ try:
                 utils.send_notification_feishu(utils.feishu_myself,f'test gmgn error:{checkgmgn.text[:100]}', 'test_gmgn_cookie_ok')
                 break
         time.sleep(10)
-except Exception as e:
-    print(e)
+    except Exception as e:
+        utils.send_notification_feishu(utils.feishu_myself,f'test gmgn Exception  error:{e}', 'test_gmgn_cookie_ok')
+        print(e)
 

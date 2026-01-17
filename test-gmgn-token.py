@@ -116,7 +116,7 @@ def checktoken():
         utils.send_notification_feishu(utils.feishu_myself,f'checktoken test gmgn error:{e}', 'test_gmgn_cookie_ok')
 while 1:    
     try:
-    
+        print(f"im x")
         checktoken()
         with open('gmgn_authorization.txt', 'r') as f:
             gmgn_Bearer = f.read().strip()

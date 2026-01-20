@@ -152,7 +152,7 @@ class AlphaDiffMonitor:
             "address": "0xc224a406e712f5396f1c3dcc681313b03547a60f",
             "is_anti_mev": True
         }
-    
+        self.already_buy = []
     async def _get_client(self) -> httpx.AsyncClient:
         """获取或创建异步 HTTP 客户端"""
         if self.client is None or self.client.is_closed:
@@ -303,13 +303,15 @@ class AlphaDiffMonitor:
         previous_addresses = set(self.previous_tokens.keys())
         current_addresses = set(current_tokens.keys())
         new_addresses = current_addresses - previous_addresses
+        new_addresses = [x for x in new_addresses if x not in self.already_buy]
         
         if new_addresses:
             logger.info(f"🎉 发现 {len(new_addresses)} 个新增 Alpha 代币!")
-            new_addresses = sorted(new_addresses, key=lambda x: float(current_tokens[x]['fdv'] or 0))
+            new_addresses = sorted(new_addresses, key=lambda x: float(current_tokens[x]['fdv'] or 0) )
 
             #new_addresses_buy = new_addresses[:2] #不能这样，有可能在里面有过滤掉一些
             new_addresses_buy = new_addresses 
+            self.already_buy.extend(list(new_addresses_buy))
             for address in new_addresses_buy:
                 token_data = current_tokens[address]
                 # onlineTge = token_data.get('onlineTge', True)

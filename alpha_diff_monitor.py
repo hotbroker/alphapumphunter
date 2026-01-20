@@ -191,7 +191,7 @@ class AlphaDiffMonitor:
                     address = token.get('contractAddress', '').lower()
                     if address:
                         result[address] = token
-                logger.debug(f"获取到 {len(result)} 个 Alpha 代币")
+                #logger.debug(f"获取到 {len(result)} 个 Alpha 代币")
                 return result
             else:
                 logger.warning(f"API 返回错误: {data.get('message')}")
@@ -304,7 +304,7 @@ class AlphaDiffMonitor:
         current_addresses = set(current_tokens.keys())
         new_addresses = current_addresses - previous_addresses
         new_addresses = [x for x in new_addresses if x not in self.already_buy]
-        
+
         if new_addresses:
             logger.info(f"🎉 发现 {len(new_addresses)} 个新增 Alpha 代币!")
             new_addresses = sorted(new_addresses, key=lambda x: float(current_tokens[x]['fdv'] or 0) )
@@ -334,7 +334,8 @@ class AlphaDiffMonitor:
                 await self.send_feishu_notification(token_data)
                 
         else:
-            logger.debug(f"无新增代币 (当前: {len(current_tokens)}, 上次: {len(self.previous_tokens)})")
+            pass
+            #logger.debug(f"无新增代币 (当前: {len(current_tokens)}, 上次: {len(self.previous_tokens)})")
         
         # 检测移除的代币（仅日志记录）
         removed_addresses = previous_addresses - current_addresses
@@ -463,7 +464,7 @@ class AlphaDiffMonitor:
                     proxyindex = proxyindex % len(proxylist)
                     thisproxy = proxylist[proxyindex]
                     proxyindex = proxyindex + 1
-                    logger.debug(f"第{chkcnt}次检查,使用代理: {thisproxy}")
+                    #logger.debug(f"第{chkcnt}次检查,使用代理: {thisproxy}")
                     await self.run_once(thisproxy)
                 except Exception as e:
                     logger.opt(exception=True).warning(f"监控轮次失败: {e}")

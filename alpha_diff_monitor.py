@@ -306,7 +306,7 @@ class AlphaDiffMonitor:
         
         if new_addresses:
             logger.info(f"🎉 发现 {len(new_addresses)} 个新增 Alpha 代币!")
-            new_addresses = sorted(new_addresses, key=lambda x: float(current_tokens[x]['fdv']))
+            new_addresses = sorted(new_addresses, key=lambda x: float(current_tokens[x]['fdv'] or 0))
 
             #new_addresses_buy = new_addresses[:2] #不能这样，有可能在里面有过滤掉一些
             new_addresses_buy = new_addresses 

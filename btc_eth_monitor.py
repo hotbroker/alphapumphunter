@@ -12,7 +12,7 @@ logger.info(f'start with file {os.path.basename(os.path.abspath(__file__))} pid 
 
 # ===== 配置 =====
 FEISHU_WEBHOOK = 'https://open.feishu.cn/open-apis/bot/v2/hook/9db5f251-187e-4884-b058-3beac2d3e2ac'
-SYMBOLS = ['BTC', 'ETH',"POWER"]
+SYMBOLS = ['BTC', 'ETH']
 CHECK_INTERVAL = 10  # 每10秒检查一次
 
 # 波动阈值
@@ -20,28 +20,44 @@ THRESHOLD_1M = 0.01   # 1分钟波动1%
 THRESHOLD_5M = 0.02   # 5分钟波动2%
 
 # 告警冷却时间（秒），避免同一币种短时间内重复告警
-ALERT_COOLDOWN = 120  # 2分钟冷却
+ALERT_COOLDOWN = 60*60*2  # 2小时冷却
 
 # 上次告警时间记录 {symbol_timeframe: timestamp}
 last_alert_time = {}
+
+
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
+    'Connection': 'keep-alive',
+}
 
 
 async def get_continuousKlines(symbol, interval='1m', limit=10):
     """获取币安永续合约K线数据"""
     symbol = symbol.upper()
     url = f'https://www.binance.com/fapi/v1/continuousKlines?interval={interval}&limit={limit}&pair={symbol}USDT&contractType=PERPETUAL'
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-        'Connection': 'keep-alive',
-    }
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(url, headers=headers)
+            r = await client.get(url, headers=HEADERS)
             r.raise_for_status()
             return r.json()
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get_continuousKlines {symbol}: {e}")
+        return None
+
+
+async def get_spotKlines(symbol, interval='1m', limit=10):
+    """获取币安现货K线数据"""
+    symbol = symbol.upper()
+    url = f'https://www.binance.com/api/v3/uiKlines?symbol={symbol}USDT&interval={interval}&limit={limit}'
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=HEADERS)
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Failed to get_spotKlines {symbol}: {e}")
         return None
 
 
@@ -87,26 +103,26 @@ def calc_volatility(klines):
     return volatility, max_high, min_low
 
 
-async def check_symbol(symbol):
-    """检查单个币种的波动情况"""
-    # 获取最近6根1分钟K线（5根已完成 + 1根当前）
-    klines = await get_continuousKlines(symbol, interval='1m', limit=6)
+async def check_klines(symbol, klines, source_label):
+    """检查一组K线的波动情况，source_label 标识来源（合约/现货）"""
     if not klines or len(klines) < 2:
-        logger.warning(f"{symbol}: K线数据不足")
+        logger.warning(f"{symbol}[{source_label}]: K线数据不足")
         return
 
     current_price = float(klines[-1][4])  # 最新收盘价
+    alert_key_prefix = f"{symbol}_{source_label}"
 
     # === 1分钟波动检查（使用最新的已完成K线） ===
-    last_kline = klines[-2]  # 最近一根已完成的K线
+    last_kline = klines[-2]
     vol_1m, high_1m, low_1m = calc_volatility([last_kline])
 
     if vol_1m >= THRESHOLD_1M:
-        if can_alert(symbol, '1m'):
+        if can_alert(alert_key_prefix, '1m'):
             direction = "📈 拉升" if float(last_kline[4]) > float(last_kline[1]) else "📉 下砸"
             change_pct = (float(last_kline[4]) - float(last_kline[1])) / float(last_kline[1]) * 100
             content = (
                 f"币种: {symbol}USDT\n"
+                f"数据源: {source_label}\n"
                 f"类型: 1分钟异常波动 {direction}\n"
                 f"波动幅度: {vol_1m*100:.2f}%\n"
                 f"涨跌幅: {change_pct:+.2f}%\n"
@@ -115,22 +131,23 @@ async def check_symbol(symbol):
                 f"当前价: {current_price}\n"
                 f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
-            logger.warning(f"[1m告警] {symbol} 波动 {vol_1m*100:.2f}%")
-            await send_feishu_alert("⚠️ 1分钟异常波动告警", content)
+            logger.warning(f"[1m告警][{source_label}] {symbol} 波动 {vol_1m*100:.2f}%")
+            await send_feishu_alert(f"⚠️ 1分钟异常波动告警 [{source_label}]", content)
 
     # === 5分钟波动检查（使用最近5根已完成K线） ===
     if len(klines) >= 6:
-        last_5_klines = klines[-6:-1]  # 最近5根已完成的K线
+        last_5_klines = klines[-6:-1]
         vol_5m, high_5m, low_5m = calc_volatility(last_5_klines)
 
         if vol_5m >= THRESHOLD_5M:
-            if can_alert(symbol, '5m'):
+            if can_alert(alert_key_prefix, '5m'):
                 open_5m = float(last_5_klines[0][1])
                 close_5m = float(last_5_klines[-1][4])
                 direction = "📈 拉升" if close_5m > open_5m else "📉 下砸"
                 change_pct = (close_5m - open_5m) / open_5m * 100
                 content = (
                     f"币种: {symbol}USDT\n"
+                    f"数据源: {source_label}\n"
                     f"类型: 5分钟异常波动 {direction}\n"
                     f"波动幅度: {vol_5m*100:.2f}%\n"
                     f"涨跌幅: {change_pct:+.2f}%\n"
@@ -139,10 +156,21 @@ async def check_symbol(symbol):
                     f"当前价: {current_price}\n"
                     f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
-                logger.warning(f"[5m告警] {symbol} 波动 {vol_5m*100:.2f}%")
-                await send_feishu_alert("🚨 5分钟异常波动告警", content)
-    else:
-        logger.debug(f"{symbol}: K线数据不足5根，跳过5分钟检查")
+                logger.warning(f"[5m告警][{source_label}] {symbol} 波动 {vol_5m*100:.2f}%")
+                await send_feishu_alert(f"🚨 5分钟异常波动告警 [{source_label}]", content)
+
+
+async def check_symbol(symbol):
+    """检查单个币种的合约+现货波动情况"""
+    # 合约K线
+    futures_klines = await get_continuousKlines(symbol, interval='1m', limit=6)
+    await check_klines(symbol, futures_klines, "合约")
+
+    await asyncio.sleep(0.3)
+
+    # 现货K线
+    spot_klines = await get_spotKlines(symbol, interval='1m', limit=6)
+    await check_klines(symbol, spot_klines, "现货")
 
 
 async def main():

@@ -556,6 +556,10 @@ async def get_symbol_future_price(symbol):
             js = r.json()
             #{"symbol":"GIGGLEUSDT","price":"177.01000","time":1762502965047}
             price= js.get("price")
+            timediff = time.time() - float(js.get("time",0))/1000
+            if timediff>100:
+                print(f"get_symbol_future_price {symbol} timediff {timediff}")
+                return None
             return price
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get_symbol_future_price {symbol}: {e}")

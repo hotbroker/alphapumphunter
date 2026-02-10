@@ -4,6 +4,7 @@ from loguru import logger
 import asyncio
 import httpx
 import time
+import utils
 
 if __name__ == "__main__":
     logger.add("log{}.log".format(os.path.basename(os.path.abspath(__file__))), rotation="1 MB",retention="3 days",level="INFO")  # Rotate logs when they reach 1 MB
@@ -105,12 +106,14 @@ def calc_volatility(klines):
 
 async def check_klines(symbol, klines, source_label):
     """检查一组K线的波动情况，source_label 标识来源（合约/现货）"""
+    print(f"checking {symbol} {source_label} {utils.time_to_string(time.time())}\r",end="")
     if not klines or len(klines) < 2:
         logger.warning(f"{symbol}[{source_label}]: K线数据不足")
         return
 
     current_price = float(klines[-1][4])  # 最新收盘价
     alert_key_prefix = f"{symbol}_{source_label}"
+    
 
     # === 1分钟波动检查（使用最新的已完成K线） ===
     last_kline = klines[-2]

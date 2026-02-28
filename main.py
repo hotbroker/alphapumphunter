@@ -818,6 +818,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
                             volUSDlist = [float(k[7]) for k in volumndata]
                             vollist = [utils.format_big_number(float(k[7])) for k in volumndata]
+    
                             takervol = [float(k[10])/float(k[7]) for k in volumndata]
                             takervol = [int(x*100)/100 for x in takervol]
                             print(f'{sym} last 15m vol vollist {vollist}')
@@ -973,7 +974,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         title="Alpha起飞告警\n"
                         #emoji fire
             
-                        if utils.is_goodpump(vollist, takervol)  and futureQV and futureQV>3000*10000:
+                        if utils.is_goodpump(volUSDlist, takervol)  and futureQV and futureQV>3000*10000:
                             title=f"Alpha起飞告警 🔥🔥🔥 推荐：{sym}\n"
                         await send_notification_async(alpha_hunter_group, msg, title=title)
                 # pacing

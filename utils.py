@@ -72,7 +72,7 @@ async def get_holders_cex(url) -> dict:
         return None
     
 
-async def get_continuousKlines(symbol, interval='15m',limit=1000):
+async def get_continuousKlines(symbol, interval='15m',limit=1000,contractType='PERPETUAL'):
     '''[
   [
     1607444700000,      	// Open time
@@ -92,7 +92,7 @@ async def get_continuousKlines(symbol, interval='15m',limit=1000):
 '''
     symbol = symbol.upper()
     #https://www.binance.com/fapi/v1/continuousKlines?interval=15m&limit=10&pair=PROMPTUSDT&contractType=PERPETUAL
-    url = f'https://www.binance.com/fapi/v1/continuousKlines?interval={interval}&limit={limit}&pair={symbol}USDT&contractType=PERPETUAL'
+    url = f'https://www.binance.com/fapi/v1/continuousKlines?interval={interval}&limit={limit}&pair={symbol}USDT&contractType={contractType}'
     headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'Accept': 'application/json',

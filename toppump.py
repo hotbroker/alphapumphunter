@@ -257,6 +257,8 @@ async def compute_energy(symbol_usdt: str) -> Dict[str, Any]:
 
     try:
         volumndata = await get_continuousKlines(base, interval='15m', limit=10)
+        if not volumndata:
+            volumndata = await get_continuousKlines(base, interval='15m', limit=10,contractType='TRADIFI_PERPETUAL')
     except Exception:
         return out
     if not volumndata or not isinstance(volumndata, list):

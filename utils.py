@@ -273,6 +273,51 @@ async def send_notification_async(
         logger.warning(f"notify failed: {e}")
 
 
+async def get_token_unlock_events(symbol: str, count: int = 2) -> dict:
+    """获取代币解锁事件，返回 {'past': [...], 'upcoming': [...]}"""
+    base_url = 'https://www.binance.com/bapi/apex/v1/public/apex/marketing/token-unlock/event'
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Connection': 'keep-alive',
+    }
+    result = {'past': [], 'upcoming': []}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            for etype in ('past', 'upcoming'):
+                url = f'{base_url}?symbol={symbol}&type={etype}&page=1&raws={count}'
+                r = await client.get(url, headers=headers)
+                r.raise_for_status()
+                js = r.json()
+                if js.get("success") and isinstance(js.get("data"), list):
+                    result[etype] = js["data"]
+    except Exception as e:
+        logger.warning(f"Failed to get token unlock events for {symbol}: {e}")
+    return result
+
+def format_unlock_events(events: dict) -> str:
+    """格式化前后各2次解锁事件"""
+    from datetime import datetime
+    past = events.get('past', [])
+    upcoming = events.get('upcoming', [])
+    # past 是倒序的，反转为正序
+    past = list(reversed(past))
+    nearby = past + upcoming
+    if not nearby:
+        return ""
+    msg = '\n🔓 代币解锁计划(前后各2次):\n'
+    today = datetime.now().strftime("%Y-%m-%d")
+    for ev in nearby:
+        date = ev.get("eventDate", "")
+        amount = ev.get("eventAmount", 0)
+        pct = ev.get("eventPercentage", 0) * 100
+        allocs = ev.get("allocations", [])
+        names = ", ".join(a["allocationName"] for a in allocs if a.get("allocationAmount", 0) > 0)
+        marker = " ◀" if date == today else ""
+        msg += f'  {date} | 解锁{format_big_number(amount)}({pct:.2f}%) [{names}]{marker}\n'
+    return msg
+
+
 def is_goodpump(buyvol, buyrate):
     if len(buyrate) <4 or len(buyvol) <4:
         return False

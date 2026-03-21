@@ -659,6 +659,13 @@ async def cmd_run_simple(
                                     ftimestr = utils.time_to_string(ftime/1000) if isinstance(ftime,(int,float)) else ftime
                                     msg.append(f"{frate:.2f}% 时间:{ftimestr}({fundingIntervalHours}h)")
                                     
+                            # 代币解锁信息
+                            unlock_events = await utils.get_token_unlock_events(_base_from_symbol(sym))
+                            if unlock_events.get('past') or unlock_events.get('upcoming'):
+                                unlock_msg = utils.format_unlock_events(unlock_events)
+                                if unlock_msg:
+                                    msg.append(unlock_msg)
+
                             msg.append(f"时间:{time_to_string(now_ts)}")
                             content = "\n".join(msg)
                             logger.info(f"Sending alert notification for {sym}:\n{content}")

@@ -488,7 +488,7 @@ async def get_holders_info2(url,datalist=['top100_holder_percent','top10_holder_
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get holders info from {url}: {e}")
         return None
-        
+
 async def get_holders_info(contract_address: str,alphachainName,datalist=['top100_holder_percent','top10_holder_percent']) -> list[int]:
     chainName={
         'Solana':'sol',
@@ -973,6 +973,12 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         else:
                             msg += f'\n{it.get("chainName","")}链无法获取持有者数据\n'
                             logger.warning(f"Failed to get holders info for {sym}")
+                        # 代币解锁信息
+                        unlock_events = await utils.get_token_unlock_events(sym)
+                        if unlock_events.get('past') or unlock_events.get('upcoming'):
+                            unlock_msg = utils.format_unlock_events(unlock_events)
+                            if unlock_msg:
+                                msg += unlock_msg
                         history = report_history.get(sym, [])
                         history.append((now, last_px, change))
                         elapsed=now-history[0][0]

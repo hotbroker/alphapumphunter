@@ -302,11 +302,14 @@ def simulate_check(symbol, target_time_str, volume_threshold=20000000):
 
 def main():
     logger.info("Starting Binance Futures Monitor...")
-    
+    exclude_symbols = ['BTCUSDT',"ETHUSDT","BCHUSDT","BNBUSDT","XRPUSDT","TRXUSDT"]
+    stocksymbols =['XAUUSDT','XAGUSDT','TSLAUSDT','XPTUSDT','XPDUSDT','INTCUSDT','HOODUSDT','MSTRUSDT','AMZNUSDT','CRCLUSDT' ,'COINUSDT'  ,'PLTRUSDT' ]
+    symbols = exclude_symbols + stocksymbols
     while True:
-        try:
+        try:    
             logger.info("Starting new scan cycle...")
             tickers = get_top_volume_tickers()
+            tickers = [s for s in tickers if s not in symbols]
             logger.info(f"Found {len(tickers)} tickers to check.")
             
             for i, symbol in enumerate(tickers):

@@ -90,7 +90,12 @@ async def get_continuousKlines(symbol, interval='15m',limit=1000,contractType='P
   ]
 ]
 '''
+    tradifi_contractType_list=['XAUUSDT','XAGUSDT','TSLAUSDT','XPTUSDT','XPDUSDT','INTCUSDT','HOODUSDT','MSTRUSDT','AMZNUSDT','CRCLUSDT' ,'COINUSDT'  ,'PLTRUSDT' ]
+
     symbol = symbol.upper()
+    if symbol+'USDT' in tradifi_contractType_list:
+        print(f'get continuousKlines {symbol}USDT contractType TRADIFI_PERPETUAL')
+        contractType='TRADIFI_PERPETUAL'
     #https://www.binance.com/fapi/v1/continuousKlines?interval=15m&limit=10&pair=PROMPTUSDT&contractType=PERPETUAL
     url = f'https://www.binance.com/fapi/v1/continuousKlines?interval={interval}&limit={limit}&pair={symbol}USDT&contractType={contractType}'
     headers = {

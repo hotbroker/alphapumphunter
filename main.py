@@ -340,6 +340,24 @@ def save_history(history, path: str="history.json"):
     except Exception as e:
         logger.warning(f"Failed to save history to {path}: {e}")
 
+def load_holder_history(path="holder_history.json"):
+    if not os.path.exists(path):
+        return {}
+    with open(path, 'r') as f:
+        try:
+            js = json.load(f)
+            return js if isinstance(js, dict) else {}
+        except Exception as e:
+            logger.warning(f"Failed to load holder history: {e}")
+            return {}
+
+def save_holder_history(data, path="holder_history.json"):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to save holder history: {e}")
+
 def load_order_list():
     orders =  utils.get_status('orderlist.json')
     if not orders:
@@ -637,6 +655,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         id_to_symbol: Dict[str, str] = {mw_token_key(it): mw_display_symbol(it) for it in items}
         logger.info(f"Tracked tokens (futures-only): {len(tracked_ids)}")
         history_ranked = load_history()
+        holder_history = load_holder_history()
 
         tracker = PriceTracker()
         window_secs = window_min * 60
@@ -929,6 +948,28 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 msg += f'减去前10大户后:{utils.format_big_number(normalholoder)}\n'
                                 cex_percent =cexholder/normalholoder*100
                                 msg += f'其中交易所持有:{utils.format_big_number(cexholder)}，占比{cex_percent:.2f}%\n'
+                            # 偏差检测与记录 top10_holder_percent 历史
+                            sym_holder_hist = holder_history.get(sym, [])
+                            should_record = False
+                            if not sym_holder_hist:
+                                should_record = True  # 第一次记录
+                            else:
+                                last_top10 = sym_holder_hist[-1]["top10"]
+                                if abs(top10_holder_percent - last_top10) >= 10:
+                                    should_record = True
+
+                            if should_record:
+                                sym_holder_hist.append({"time": now, "top10": round(top10_holder_percent, 2)})
+                                holder_history[sym] = sym_holder_hist
+                                save_holder_history(holder_history)
+
+                            # 在告警消息末尾追加历史变化
+                            if len(sym_holder_hist) > 0:
+                                msg += f'\n📊 前10持有者占比变化记录:\n'
+                                for rec in sym_holder_hist:
+                                    t_str = utils.time_to_string(rec["time"])
+                                    val = rec["top10"]
+                                    msg += f'  {t_str} → {val:.2f}%\n'
                         else:
                             msg += f'\n{it.get("chainName","")}链无法获取持有者数据\n'
                             logger.warning(f"Failed to get holders info for {sym}")

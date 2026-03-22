@@ -521,7 +521,8 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
                     results[dt] = vallist[-1]['value'] if vallist else 0
             top100_holder_percent = float(results.get('top100_holder_percent',0))
             top10_holder_percent = float(results.get('top10_holder_percent',0))
-            if not results or top100_holder_percent>1 or top10_holder_percent>1 or top100_holder_percent==0 or top10_holder_percent==0:
+            slowdata = 1 #上面接口数据有延迟，还是不能用，虽然能找到实时的top10,但top100的没有
+            if slowdata or  not results or top100_holder_percent>1 or top10_holder_percent>1 or top100_holder_percent==0 or top10_holder_percent==0:
                 results= await get_holders_info2(newurl,datalist)
                 logger.info(f'fix holders info for {contract_address} : {results}')
             if results:
@@ -667,7 +668,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
         next_refresh = time.time() + refresh_minutes * 60
         last_report_rank =0
-        testresult = await test('0xc9ccbd76c2353e593cc975f13295e8289d04d3bb','BSC')
+        testresult = await test('0x997a58129890bbda032231a52ed1ddc845fc18e1','BSC')
         print(f'test holders info: {testresult}')
         testsym = "GIGGLE"
         testprice = await get_symbol_future_price(testsym)

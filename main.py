@@ -682,7 +682,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         # testresult = await utils.get_holders_cex(newurl)
         # print(f'test holders info from fallback url: {testresult}')
         
-        round=0
+        roundcnt=0
         orderlist = load_order_list()
         
         # await place_future_order("AR",1)
@@ -704,8 +704,8 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         report_pnl_time=0
         while True:
             num = len(list(tracked_ids))
-            round = round+1
-            logger.info(f'check round {round},number symbol {num}')
+            roundcnt = roundcnt+1
+            logger.info(f'check round {roundcnt},number symbol {num}')
             bypass = get_bypass_token()
             bypass = [x.strip().upper() for x in bypass if x.strip()]
             tick_start = time.time()
@@ -1034,6 +1034,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                 return
             except Exception as e:
                 logger.opt(exception=True).error(f"Monitor loop error: {e}")
+                await send_notification_async('veryverybad', f"Monitor loop error: {e}", title="Alpha PumpHunter Error\n")
                 await asyncio.sleep(max(5.0, interval / 2))
 
 

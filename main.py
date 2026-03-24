@@ -8,6 +8,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Deque, Dict, Iterable, List, MutableMapping, Optional, Set, Tuple,Any
+import traceback
 
 import httpx
 from loguru import logger
@@ -1037,8 +1038,9 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                 logger.info("Stopped.")
                 return
             except Exception as e:
+                stackmsg = traceback.format_exc()
                 logger.opt(exception=True).error(f"Monitor loop error: {e}")
-                await send_notification_async('veryverybad', f"Monitor loop error: {e}", title="Alpha PumpHunter Error\n")
+                await send_notification_async('veryverybad', f"Monitor loop error: {e}\n{stackmsg}", title="Alpha PumpHunter Error\n")
                 await asyncio.sleep(max(5.0, interval / 2))
 
 

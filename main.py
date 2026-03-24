@@ -601,7 +601,10 @@ async def fetch_binance_futures_24h() -> List[Dict[str, Any]]:
         return data
 
 async def place_future_order(sym,vibelevel):
-    possize = vibeLevelPos[vibelevel]
+    possize = vibeLevelPos.get(vibelevel,0)
+    if possize == 0:
+        logger.warning(f"vibelevel {vibelevel} not found, skip order")
+        return None
 
     if not sym.endswith("USDT"):
         sym = sym+"USDT"

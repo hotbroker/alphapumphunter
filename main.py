@@ -359,6 +359,33 @@ def save_holder_history(data, path="holder_history.json"):
     except Exception as e:
         logger.warning(f"Failed to save holder history: {e}")
 
+HIGH_CONTROL_CACHE_PATH = "high_control_tokens.json"
+
+def load_high_control_tokens():
+    if not os.path.exists(HIGH_CONTROL_CACHE_PATH):
+        return {}
+    try:
+        with open(HIGH_CONTROL_CACHE_PATH, 'r', encoding='utf-8') as f:
+            js = json.load(f)
+            return js if isinstance(js, dict) else {}
+    except Exception as e:
+        logger.warning(f"Failed to load high control tokens: {e}")
+        return {}
+
+def save_high_control_token(sym, data):
+    tokens = load_high_control_tokens()
+    tokens[sym] = data
+    # 清理超过7天的旧条目
+    now = time.time()
+    tokens = {k: v for k, v in tokens.items() if now - v.get('detected_time', 0) < 7 * 24 * 3600}
+    try:
+        with open(HIGH_CONTROL_CACHE_PATH, 'w', encoding='utf-8') as f:
+            json.dump(tokens, f, indent=2, ensure_ascii=False)
+        logger.info(f"保存高控盘币种 {sym} 到缓存，当前共 {len(tokens)} 个")
+    except Exception as e:
+        logger.warning(f"Failed to save high control token: {e}")
+
+
 def load_order_list():
     orders =  utils.get_status('orderlist.json')
     if not orders:
@@ -941,6 +968,18 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
                             top100_holder_percent = float(top100_holder_percent)*100
                             top10_holder_percent = float(top10_holder_percent)*100
+                            # 高控盘检测：存入缓存
+                            if top10_holder_percent > 96 or top100_holder_percent > 97:
+                                save_high_control_token(sym, {
+                                    "symbol": sym,
+                                    "contractAddress": it.get("contractAddress", ""),
+                                    "chainName": it.get("chainName", ""),
+                                    "top10_holder_percent": top10_holder_percent,
+                                    "top100_holder_percent": top100_holder_percent,
+                                    "fdv": str(it.get("fdv", "0")),
+                                    "marketCap": str(it.get("marketCap", "0")),
+                                    "detected_time": time.time()
+                                })
                             msg += f'\n前100持有者占比:{top100_holder_percent:.2f}%({utils.format_big_number(top100_holder_fdv)})\n'
                             msg += f'前10持有者占比:{top10_holder_percent:.2f}%({utils.format_big_number(top10_holder_fdv)})\n'
                             cexdata = results.get('cexdata',{})

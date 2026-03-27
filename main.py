@@ -594,12 +594,13 @@ async def get_symbol_future_price(symbol):
     'Accept': 'application/json',
     'Connection': 'keep-alive',
 }
-    
-    try:
-
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(url, headers=headers)
-            r.raise_for_status()
+    trycnt = 3
+    while trycnt > 0:
+        trycnt -= 1
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(url, headers=headers)
+                r.raise_for_status()
             js = r.json()
             #{"symbol":"GIGGLEUSDT","price":"177.01000","time":1762502965047}
             price= js.get("price")
@@ -608,9 +609,10 @@ async def get_symbol_future_price(symbol):
                 print(f"get_symbol_future_price {symbol} timediff {timediff}")
                 return None
             return price
-    except Exception as e:
-        logger.opt(exception=True).warning(f"Failed to get_symbol_future_price {symbol}: {e}")
-        return None
+        except Exception as e:
+            logger.opt(exception=True).warning(f"trycnt {trycnt} Failed to get_symbol_future_price {symbol}: {e}")
+            continue
+    return None
 
 BINANCE_FAPI_TICKER_24H = "https://www.binance.com/fapi/v1/ticker/24hr"
 

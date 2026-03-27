@@ -1066,9 +1066,9 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 msg = msg+f"{frate:.2f}% 时间:{ftimestr}({fundingIntervalHours}h)\n"
 
                         print(msg)
-                        title="Alpha起飞告警\n"
+                        title=f"Alpha起飞告警 {sym}\n"
                         #emoji fire
-            
+             
                         if utils.is_goodpump(volUSDlist, takervol)  and futureQV and futureQV>3000*10000:
                             title=f"Alpha起飞告警 🔥🔥🔥 推荐：{sym}\n"
                         if is_high_control:

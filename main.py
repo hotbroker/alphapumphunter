@@ -958,6 +958,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         msg += f'完全稀释市值:{utils.format_big_number(it.get("fdv", "-"))}\n\n'
                         msg += f'时间:{utils.time_to_string(now)}\n'
                         #msg += f'来源:Alpha PumpHunter'
+                        is_high_control = False
                         results = await get_holders_info(it.get("contractAddress",""),it.get("chainName",""))
                         if results:
                             fdv = float(it.get("fdv", 0))
@@ -970,6 +971,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             top10_holder_percent = float(top10_holder_percent)*100
                             # 高控盘检测：存入缓存
                             if top10_holder_percent > 96 or top100_holder_percent > 97:
+                                is_high_control = True
                                 save_high_control_token(sym, {
                                     "symbol": sym,
                                     "contractAddress": it.get("contractAddress", ""),
@@ -1067,6 +1069,8 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
             
                         if utils.is_goodpump(volUSDlist, takervol)  and futureQV and futureQV>3000*10000:
                             title=f"Alpha起飞告警 🔥🔥🔥 推荐：{sym}\n"
+                        if is_high_control:
+                            title="高控盘-"+title
                         await send_notification_async(alpha_hunter_group, msg, title=title)
                 # pacing
                 elapsed = time.time() - tick_start

@@ -481,88 +481,9 @@ def save_highest_record(history_ranked,item):
     return history_ranked
     
 
-async def get_holders_info2(url,datalist=['top100_holder_percent','top10_holder_percent']) -> dict:
-    logger.info(f'get holders info from fallback url: {url}')
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-        'Connection': 'keep-alive',
-    }
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(url, headers=headers)
-            r.raise_for_status()
-            js = r.json()
-            holder_list = js.get("data", {}).get("list", [])
-            logger.info(f'number of holders retrieved: {len(holder_list)}')
-            
-            # Sort holders by amount_percentage in descending order
-            sorted_holders = sorted(holder_list, key=lambda x: float(x.get("amount_percentage", 0)), reverse=True)
-            
-            results = {}
-            if "top100_holder_percent" in datalist and len(sorted_holders) > 0:
-                top100 = sorted_holders[:100]
-                print(f'length of top100 holders: {len(top100)},first item: {top100[0]["amount_percentage"]}')
-                top100_percent = sum(float(h.get("amount_percentage", 0)) for h in top100)
-                results["top100_holder_percent"] = top100_percent 
-                
-            if "top10_holder_percent" in datalist and len(sorted_holders) > 0:
-                top10 = sorted_holders[:10]
-                top10_percent = sum(float(h.get("amount_percentage", 0)) for h in top10)
-                results["top10_holder_percent"] = top10_percent 
-                
-            return results
-            
-    except Exception as e:
-        logger.opt(exception=True).warning(f"Failed to get holders info from {url}: {e}")
-        return None
-
-async def get_holders_info(contract_address: str,alphachainName,datalist=['top100_holder_percent','top10_holder_percent']) -> list[int]:
-    chainName={
-        'Solana':'sol',
-        'BSC':'bsc',
-        'Base':'base',
-        'Ethereum':'eth',
-    }
-    chainid = chainName.get(alphachainName,'')
-    if not chainid:
-        return None
-    url=f'https://gmgn.ai/api/v1/token_trends/{chainid}/{contract_address}?trends_type=avg_holding_balance&trends_type=holder_count&trends_type=top10_holder_percent&trends_type=top100_holder_percent'
-    #url=f'https://gmgn.ai/vas/api/v1/token_holders/{chainid}/{contract_address}'
-    headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Accept': 'application/json',
-    'Connection': 'keep-alive',
-}
-    try:
-        print(url)
-        newurl = f'https://gmgn.ai/vas/api/v1/token_holders/{chainid}/{contract_address}?limit=100&cost=20&orderby=amount_percentage&direction=desc'
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(url, headers=headers)
-            r.raise_for_status()
-            js = r.json()
-            trends= js.get("data",{}).get("trends",{})
-            results = {}
-            for dt in datalist:
-                vallist=  trends.get(dt,[])
-                if vallist:
-                    results[dt] = vallist[-1]['value'] if vallist else 0
-            top100_holder_percent = float(results.get('top100_holder_percent',0))
-            top10_holder_percent = float(results.get('top10_holder_percent',0))
-            slowdata = 1 #上面接口数据有延迟，还是不能用，虽然能找到实时的top10,但top100的没有
-            if slowdata or  not results or top100_holder_percent>1 or top10_holder_percent>1 or top100_holder_percent==0 or top10_holder_percent==0:
-                results= await get_holders_info2(newurl,datalist)
-                logger.info(f'fix holders info for {contract_address} : {results}')
-            if results:
-                results['cexdata'] = await utils.get_holders_cex(newurl)
-            logger.info(f'holders info for {contract_address} : {results}')
-            return results
-    except Exception as e:
-        logger.opt(exception=True).warning(f"Failed to get holders count for {contract_address}: {e}")
-        return None
     
 async def test(ca,chainid,fdv=100*1000*1000):
-        results = await get_holders_info(ca,chainid)
+        results = await utils.get_holders_info(ca,chainid)
         msg = ""
         if results:
             top100_holder_percent = results.get('top100_holder_percent',0)
@@ -961,7 +882,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         msg += f'时间:{utils.time_to_string(now)}\n'
                         #msg += f'来源:Alpha PumpHunter'
                         is_high_control = False
-                        results = await get_holders_info(it.get("contractAddress",""),it.get("chainName",""))
+                        results = await utils.get_holders_info(it.get("contractAddress",""),it.get("chainName",""))
                         if results:
                             fdv = float(it.get("fdv", 0))
                             top100_holder_percent = results.get('top100_holder_percent',0)

@@ -119,25 +119,42 @@ async def check_token(sym, token_info, alert_history):
     logger.info(f"{sym} 最近{KLINE_COUNT}根15mK线: 平均涨跌幅{avg_change:.3f}%, 最大{max_change:.3f}%, top10={token_info.get('top10_holder_percent', 0):.1f}%, top100={token_info.get('top100_holder_percent', 0):.1f}%")
 
     if avg_change <= MAX_AVG_CHANGE_PCT:
-        # 触发告警
+        # 触发告警前获取最新持仓占比
+        current_holders = await utils.get_holders_info(token_info.get("contractAddress", ""), token_info.get("chainName", ""))
+        
+        # top10_now = token_info.get('top10_holder_percent', 0)
+        # top100_now = token_info.get('top100_holder_percent', 0)
+        
+        if current_holders:
+            top10_now = current_holders.get('top10_holder_percent', 0)
+            top100_now = current_holders.get('top100_holder_percent', 0)
+            top10_now = float(top10_now)*100
+            top100_now = float(top100_now)*100
+            # # 更新缓存中的信息（可选，但通常有助于保持一致性）
+            # token_info['top10_holder_percent'] = top10_now
+            # token_info['top100_holder_percent'] = top100_now
+
         now = time.time()
         first_kline_time = utils.time_to_string(recent_klines[0][0] / 1000)
         last_kline_time = utils.time_to_string(recent_klines[-1][6] / 1000)
         change_list = [f"{c:.2f}%" for c in changes]
 
         msg = (
-            f"🚨 高控盘横盘信号 - 拉盘前兆\n\n"
+            f"🚨 高控盘横盘信号 - 拉盘前兆 {sym}\n\n"
             f"币种: {sym}\n"
-            f"前10持有者占比: {token_info.get('top10_holder_percent', 0):.2f}%\n"
-            f"前100持有者占比: {token_info.get('top100_holder_percent', 0):.2f}%\n"
+            f"上报告警时前10持有者占比: {token_info.get('top10_holder_percent', 0):.2f}%\n"
+            f"上报告警时前100持有者占比: {token_info.get('top100_holder_percent', 0):.2f}%\n"
+            f"上报告警时的时间: {utils.time_to_string(token_info.get('detected_time', 0))}\n"
             f"FDV: {utils.format_big_number(float(token_info.get('fdv', 0)))}\n"
             f"市值: {utils.format_big_number(float(token_info.get('marketCap', 0)))}\n\n"
+            f"当前前10持有者占比: {top10_now:.2f}%\n"
+            f"当前前100持有者占比: {top100_now:.2f}%\n"
             f"📊 最近{KLINE_COUNT}根15分钟K线涨跌幅:\n"
             f"  {change_list}\n"
             f"  平均涨跌幅: {avg_change:.3f}%\n"
             f"  最大涨跌幅: {max_change:.3f}%\n\n"
             f"⏰ K线时间范围: {first_kline_time} ~ {last_kline_time}\n"
-            f"⏰ 检测时间: {utils.time_to_string(now)}\n\n"
+            f"⏰ 报告时间: {utils.time_to_string(now)}\n\n"
             f"💡 高控盘+长期横盘 = 拉盘前兆信号，请关注！"
         )
 

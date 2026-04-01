@@ -524,6 +524,10 @@ async def get_holders_info2(url,datalist=['top100_holder_percent','top10_holder_
                 print(f'length of top100 holders: {len(top100)},first item: {top100[0]["amount_percentage"]}')
                 top100_percent = sum(float(h.get("amount_percentage", 0)) for h in top100)
                 results["top100_holder_percent"] = top100_percent 
+                for h in top100:
+                    if h.get("address", "").lower() == "0x73d8bd54f7cf5fab43fe4ef40a62d390644946db":
+                        results['bnalpha_holdings'] = float(h.get("amount_percentage", 0))
+
                 
             if "top10_holder_percent" in datalist and len(sorted_holders) > 0:
                 top10 = sorted_holders[:10]

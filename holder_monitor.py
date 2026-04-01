@@ -57,17 +57,21 @@ class HolderDB:
                     timestamp REAL,
                     top10_percent REAL,
                     top100_percent REAL,
+                    bnalpha_percent REAL,
                     vol_24h REAL,
                     oi_usd REAL,
                     price_index_info TEXT
                 )
             ''')
-            # Migration: check if oi_usd exists
+            # Migration: check if columns exist
             cursor.execute("PRAGMA table_info(holder_records)")
             columns = [column[1] for column in cursor.fetchall()]
             if 'oi_usd' not in columns:
                 logger.info("Migrating DB: adding oi_usd column to holder_records")
                 cursor.execute('ALTER TABLE holder_records ADD COLUMN oi_usd REAL')
+            if 'bnalpha_percent' not in columns:
+                logger.info("Migrating DB: adding bnalpha_percent column to holder_records")
+                cursor.execute('ALTER TABLE holder_records ADD COLUMN bnalpha_percent REAL')
                 
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_records_symbol_time ON holder_records (symbol, timestamp)')
             conn.commit()
@@ -104,13 +108,13 @@ class HolderDB:
             cursor.execute('SELECT * FROM monitored_tokens')
             return [dict(row) for row in cursor.fetchall()]
 
-    def insert_record(self, symbol: str, top10: float, top100: float, vol_24h: float, oi_usd: float, index_info: str):
+    def insert_record(self, symbol: str, top10: float, top100: float, bnalpha: float, vol_24h: float, oi_usd: float, index_info: str):
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO holder_records (symbol, timestamp, top10_percent, top100_percent, vol_24h, oi_usd, price_index_info)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (symbol.upper(), time.time(), top10, top100, vol_24h, oi_usd, index_info))
+                INSERT INTO holder_records (symbol, timestamp, top10_percent, top100_percent, bnalpha_percent, vol_24h, oi_usd, price_index_info)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (symbol.upper(), time.time(), top10, top100, bnalpha, vol_24h, oi_usd, index_info))
             conn.commit()
 
     def get_history(self, hours: int = 24) -> Dict[str, List[dict]]:
@@ -155,6 +159,7 @@ async def fetch_fapi_tickers() -> Dict[str, dict]:
     except Exception as e:
         logger.error(f"Failed to fetch FAPI tickers: {e}")
         return {}
+
 @utils.retry_on_xxx(max_retries=3, delay=2,except_code=[429])
 async def fetch_fapi_oi(symbol: str) -> float:
     """Fetch Open Interest in USD value for a symbol."""
@@ -237,6 +242,7 @@ async def monitor_step(db: HolderDB):
 
                 top10 = float(holder_info.get('top10_holder_percent', 0))
                 top100 = float(holder_info.get('top100_holder_percent', 0))
+                bnalpha = float(holder_info.get('bnalpha_holdings', 0)) # Using the field user added in utils.py
                 
                 # 2. Fetch 24h Vol and Price
                 ticker = fapi_tickers.get(fapi_sym, {})
@@ -251,7 +257,7 @@ async def monitor_step(db: HolderDB):
                 index_info = await utils.get_index_constituents(fapi_sym)
                 
                 # Save
-                db.insert_record(sym, top10, top100, vol_24h, oi_usd, index_info)
+                db.insert_record(sym, top10, top100, bnalpha, vol_24h, oi_usd, index_info)
             except Exception as e:
                 logger.error(f"Error collecting data for {sym}: {e}")
 

@@ -146,11 +146,12 @@ async def fetch_alpha_items() -> List[dict]:
 
 async def fetch_fapi_tickers() -> Dict[str, dict]:
     try:
+        now = time.time()
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.get(BINANCE_FAPI_TICKER_24H, headers=MARKETWEBB_HEADERS)
             r.raise_for_status()
             data = r.json()
-            return {item['symbol']: item for item in data}
+            return {item['symbol']: item for item in data if now - float(item['closeTime']) / 1000 < 60}
     except Exception as e:
         logger.error(f"Failed to fetch FAPI tickers: {e}")
         return {}

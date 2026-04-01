@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -205,7 +206,10 @@
         /* Loading */
         #loader {
             position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             background: var(--bg-color);
             display: flex;
             justify-content: center;
@@ -216,6 +220,7 @@
         }
     </style>
 </head>
+
 <body>
     <div id="loader">加载中...</div>
 
@@ -277,7 +282,7 @@
 
         async function fetchTokens() {
             try {
-                const res = await fetch('/api/tokens');
+                const res = await fetch('api/tokens');
                 tokens = await res.json();
                 renderTokenList();
                 if (tokens.length > 0 && !currentSymbol) {
@@ -293,7 +298,7 @@
             const list = document.getElementById('token-list');
             // 按 vol_24h 从大到小排序
             const sortedTokens = [...tokens].sort((a, b) => (b.vol_24h || 0) - (a.vol_24h || 0));
-            
+
             list.innerHTML = sortedTokens.map(t => `
                 <div class="token-item ${t.symbol === currentSymbol ? 'active' : ''}" onclick="selectToken('${t.symbol}')">
                     <div>
@@ -312,7 +317,7 @@
             const token = tokens.find(t => t.symbol === symbol);
             document.getElementById('current-token-name').innerText = symbol;
             document.getElementById('token-ca').innerText = `CA: ${token.ca} (${token.chain})`;
-            
+
             renderTokenList();
             await refreshChart();
         }
@@ -329,26 +334,26 @@
             if (!currentSymbol) return;
             try {
                 const [histRes, indexRes] = await Promise.all([
-                    fetch(`/api/history/${currentSymbol}?hours=72`),
-                    fetch(`/api/index_history/${currentSymbol}`)
+                    fetch(`api/history/${currentSymbol}?hours=72`),
+                    fetch(`api/index_history/${currentSymbol}`)
                 ]);
-                
+
                 const history = await histRes.json();
                 const indexHistory = await indexRes.json();
-                
+
                 if (history.length === 0) {
                     if (chart) chart.destroy();
                     return;
                 }
 
-                const labels = history.map(h => new Date(h.timestamp * 1000).toLocaleString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}));
+                const labels = history.map(h => new Date(h.timestamp * 1000).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
                 const percentData = history.map(h => h[currentMode + '_percent'] * 100);
-                const volData = history.map(h => h.vol_24h / 1000000); 
+                const volData = history.map(h => h.vol_24h / 1000000);
                 const oiData = history.map(h => h.oi_usd / 1000000);
 
                 updateStats(history);
                 renderChart(labels, percentData, volData, oiData);
-                
+
                 // Render Index History List
                 const indexDetails = document.getElementById('index-details');
                 if (indexHistory.length > 0) {
@@ -361,7 +366,7 @@
                 } else {
                     indexDetails.innerText = '暂无详细构成数据';
                 }
-                
+
             } catch (err) {
                 console.error("Refresh chart failed", err);
             }
@@ -372,7 +377,7 @@
             const first = history[0];
             const currentVal = last[currentMode + '_percent'] * 100;
             const change = currentVal - (first[currentMode + '_percent'] * 100);
-            
+
             document.getElementById('stat-percent').innerText = currentVal.toFixed(2) + '%';
             const changeEl = document.getElementById('stat-change');
             changeEl.innerText = (change >= 0 ? '+' : '') + change.toFixed(4) + '%';
@@ -383,7 +388,7 @@
 
         function renderChart(labels, percentData, volData, oiData) {
             const ctx = document.getElementById('mainChart').getContext('2d');
-            
+
             if (chart) chart.destroy();
 
             chart = new Chart(ctx, {
@@ -471,6 +476,7 @@
         }
 
         function formatVol(num) {
+            if (num >= 1000000000) return (num / 1000000000).toFixed(2) + 'B';
             if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
             if (num >= 1000) return (num / 1000).toFixed(2) + 'K';
             return num.toFixed(0);
@@ -481,4 +487,5 @@
         setInterval(fetchTokens, 60000); // 1 minute refresh
     </script>
 </body>
+
 </html>

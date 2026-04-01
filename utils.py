@@ -501,7 +501,7 @@ async def get_index_constituents(symbol: str) -> str:
 
 
 async def get_holders_info2(url,datalist=['top100_holder_percent','top10_holder_percent']) -> dict:
-    logger.info(f'get holders info from fallback url: {url}')
+    #logger.info(f'get holders info from fallback url: {url}')
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json',
@@ -577,7 +577,7 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
                 logger.info(f'fix holders info for {contract_address} : {results}')
             if results:
                 results['cexdata'] = await get_holders_cex(newurl)
-            logger.info(f'holders info for {contract_address} : {results}')
+            #logger.info(f'holders info for {contract_address} : {results}')
             return results
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get holders count for {contract_address}: {e}")

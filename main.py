@@ -882,7 +882,14 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         msg += f'时间:{utils.time_to_string(now)}\n'
                         #msg += f'来源:Alpha PumpHunter'
                         is_high_control = False
-                        results = await utils.get_holders_info(it.get("contractAddress",""),it.get("chainName",""))
+                        
+                        results_task = utils.get_holders_info(it.get("contractAddress",""),it.get("chainName",""))
+                        index_constituents_task = utils.get_index_constituents(sym)
+                        results, index_constituents = await asyncio.gather(results_task, index_constituents_task)
+                        
+                        if index_constituents:
+                            msg += f"{index_constituents}\n"
+                        
                         if results:
                             fdv = float(it.get("fdv", 0))
                             top100_holder_percent = results.get('top100_holder_percent',0)

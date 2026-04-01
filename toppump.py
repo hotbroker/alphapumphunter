@@ -613,6 +613,7 @@ async def cmd_run_simple(
                             await report_pos_pnl()
 
                             qv = _to_float(r, "quoteVolume")
+                            index_constituents = await utils.get_index_constituents(sym)
                             vol_usd_list = en.get("vol_usd_list", [])
                             vol_last5 = vol_usd_list[-5:]
                             pct24 = _to_float(r, 'priceChangePercent')
@@ -632,6 +633,8 @@ async def cmd_run_simple(
                             msg.append(f"15m能量:L{energy_level} {en.get('energy_note','')}{star}")
                             msg.append(f"15m成交额列:{[format_big_number(x) for x in vol_last5]}")
                             msg.append(f"买入情绪:{_format_buy_ratio(ratios)}")
+                            if index_constituents:
+                                msg.append(index_constituents)
                             last3 = ratios[-4:-1]
                             last3Min045 = [x for x in last3 if x<0.46]
                             if max(last3)<0.49 or len(last3Min045)>1:

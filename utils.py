@@ -420,6 +420,50 @@ def test_gmgn_cookie_ok(headersparams, cookiesparams):
     return response
 
 
+async def get_index_constituents(symbol: str) -> str:
+    """获取币安合约指数构成，返回前3大成分的格式化字符串"""
+    if not symbol:
+        return ""
+    
+    symbol_upper = symbol.upper()
+    if not symbol_upper.endswith("USDT"):
+        symbol_upper = f"{symbol_upper}USDT"
+        
+    url = f"https://www.binance.com/fapi/v1/constituents?symbol={symbol_upper}"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=headers)
+            if r.status_code != 200:
+                return ""
+            
+            data = r.json()
+            constituents = data.get("constituents", [])
+            if not constituents:
+                return ""
+            
+            # 按权重降序排序
+            sorted_constituents = sorted(constituents, key=lambda x: float(x.get("weight", 0)), reverse=True)
+            
+            # 取前3个
+            top_3 = sorted_constituents[:3]
+            parts = []
+            for c in top_3:
+                exchange = c.get("exchange", "Unknown").capitalize()
+                weight = float(c.get("weight", 0)) * 100
+                parts.append(f"{exchange}({weight:.1f}%)")
+            
+            return "指数成份: " + ", ".join(parts)
+            
+    except Exception as e:
+        logger.warning(f"Failed to get index constituents for {symbol_upper}: {e}")
+        return ""
+
+
 async def get_holders_info2(url,datalist=['top100_holder_percent','top10_holder_percent']) -> dict:
     logger.info(f'get holders info from fallback url: {url}')
     headers = {

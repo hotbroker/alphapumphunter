@@ -115,15 +115,22 @@ async def check_token(sym, token_info, alert_history):
 
     avg_change = sum(changes) / len(changes)
     max_change = max(changes)
-
+    if max_change>2:
+        return False
+    bigchangelist = [c for c in changes if c>1.5]
+    if len(bigchangelist)>1:
+        return False
     logger.info(f"{sym} 最近{KLINE_COUNT}根15mK线: 平均涨跌幅{avg_change:.3f}%, 最大{max_change:.3f}%, top10={token_info.get('top10_holder_percent', 0):.1f}%, top100={token_info.get('top100_holder_percent', 0):.1f}%")
-
+    
     if avg_change <= MAX_AVG_CHANGE_PCT:
-        # 触发告警前获取最新持仓占比
-        current_holders = await utils.get_holders_info(token_info.get("contractAddress", ""), token_info.get("chainName", ""))
+        # 触发告警前获取最新信息
+        current_holders_task = utils.get_holders_info(token_info.get("contractAddress", ""), token_info.get("chainName", ""))
+        index_constituents_task = utils.get_index_constituents(sym)
         
-        # top10_now = token_info.get('top10_holder_percent', 0)
-        # top100_now = token_info.get('top100_holder_percent', 0)
+        current_holders, index_constituents = await asyncio.gather(current_holders_task, index_constituents_task)
+        
+        top10_now = 0
+        top100_now = 0
         
         if current_holders:
             top10_now = current_holders.get('top10_holder_percent', 0)
@@ -149,6 +156,7 @@ async def check_token(sym, token_info, alert_history):
             f"市值: {utils.format_big_number(float(token_info.get('marketCap', 0)))}\n\n"
             f"当前前10持有者占比: {top10_now:.2f}%\n"
             f"当前前100持有者占比: {top100_now:.2f}%\n"
+            f"{index_constituents}\n"
             f"📊 最近{KLINE_COUNT}根15分钟K线涨跌幅:\n"
             f"  {change_list}\n"
             f"  平均涨跌幅: {avg_change:.3f}%\n"

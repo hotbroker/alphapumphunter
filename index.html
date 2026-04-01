@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大哥的持仓监控仪表盘</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --sidebar-bg: #111827;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-color: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --active-bg: #334155;
+            --border-color: #334155;
+            --top10-color: #f59e0b;
+            --top100-color: #10b981;
+            --vol-color: #6366f1;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        #sidebar {
+            width: 280px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s;
+        }
+
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--accent-color);
+            letter-spacing: -0.025em;
+        }
+
+        #token-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .token-item {
+            padding: 12px 16px;
+            margin-bottom: 4px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .token-item:hover {
+            background-color: var(--active-bg);
+        }
+
+        .token-item.active {
+            background-color: var(--active-bg);
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .token-item div {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .token-symbol {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .token-vol {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* Main Content */
+        #main-content {
+            flex: 1;
+            padding: 32px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .token-info-header h2 {
+            font-size: 2rem;
+            font-weight: 800;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            background: var(--card-bg);
+            padding: 4px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .control-btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .control-btn.active {
+            background: var(--bg-color);
+            color: var(--text-primary);
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .stat-card {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        /* Chart Area */
+        .chart-container {
+            background-color: var(--card-bg);
+            padding: 24px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+            position: relative;
+            flex: 1;
+            min-height: 400px;
+        }
+
+        .info-panel {
+            background-color: var(--card-bg);
+            padding: 24px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .info-title {
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--accent-color);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        /* Loading */
+        #loader {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <div id="loader">加载中...</div>
+
+    <aside id="sidebar">
+        <div class="sidebar-header">
+            <h1>大哥 · 持仓监控</h1>
+        </div>
+        <div id="token-list">
+            <!-- Tokens injected here -->
+        </div>
+    </aside>
+
+    <main id="main-content">
+        <div class="header-actions">
+            <div class="token-info-header">
+                <h2 id="current-token-name">请选择币种</h2>
+                <p id="token-ca" style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 4px;"></p>
+            </div>
+            <div class="controls">
+                <button class="control-btn active" onclick="setMode('top100')">Top 100</button>
+                <button class="control-btn" onclick="setMode('top10')">Top 10</button>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">最新持仓比例</div>
+                <div class="stat-value" id="stat-percent">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">今日变动 (Δ)</div>
+                <div class="stat-value" id="stat-change">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">24h 合约交易额</div>
+                <div class="stat-value" id="stat-vol">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">当前合约持仓 (OI)</div>
+                <div class="stat-value" id="stat-oi">--</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="mainChart"></canvas>
+        </div>
+
+        <div class="info-panel" id="index-info-panel">
+            <div class="info-title">价格指数构成 (Index Constituents)</div>
+            <div id="index-details">暂无数据</div>
+        </div>
+    </main>
+
+    <script>
+        let tokens = [];
+        let currentSymbol = null;
+        let currentMode = 'top100'; // 'top10' or 'top100'
+        let chart = null;
+
+        async function fetchTokens() {
+            try {
+                const res = await fetch('/api/tokens');
+                tokens = await res.json();
+                renderTokenList();
+                if (tokens.length > 0 && !currentSymbol) {
+                    selectToken(tokens[0].symbol);
+                }
+                document.getElementById('loader').style.display = 'none';
+            } catch (err) {
+                console.error("Fetch tokens failed", err);
+            }
+        }
+
+        function renderTokenList() {
+            const list = document.getElementById('token-list');
+            // 按 vol_24h 从大到小排序
+            const sortedTokens = [...tokens].sort((a, b) => (b.vol_24h || 0) - (a.vol_24h || 0));
+            
+            list.innerHTML = sortedTokens.map(t => `
+                <div class="token-item ${t.symbol === currentSymbol ? 'active' : ''}" onclick="selectToken('${t.symbol}')">
+                    <div>
+                        <span class="token-symbol">${t.symbol}</span>
+                        <span class="token-vol">${formatVol(t.vol_24h || 0)}</span>
+                    </div>
+                    <span style="font-size: 0.75rem; font-weight: 700; color: ${t.top100_percent > 0.5 ? '#10b981' : '#f59e0b'}">
+                        ${(t.top100_percent * 100).toFixed(1)}%
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        async function selectToken(symbol) {
+            currentSymbol = symbol;
+            const token = tokens.find(t => t.symbol === symbol);
+            document.getElementById('current-token-name').innerText = symbol;
+            document.getElementById('token-ca').innerText = `CA: ${token.ca} (${token.chain})`;
+            
+            renderTokenList();
+            await refreshChart();
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.control-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.innerText.toLowerCase().replace(' ', '') === mode);
+            });
+            refreshChart();
+        }
+
+        async function refreshChart() {
+            if (!currentSymbol) return;
+            try {
+                const [histRes, indexRes] = await Promise.all([
+                    fetch(`/api/history/${currentSymbol}?hours=72`),
+                    fetch(`/api/index_history/${currentSymbol}`)
+                ]);
+                
+                const history = await histRes.json();
+                const indexHistory = await indexRes.json();
+                
+                if (history.length === 0) {
+                    if (chart) chart.destroy();
+                    return;
+                }
+
+                const labels = history.map(h => new Date(h.timestamp * 1000).toLocaleString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}));
+                const percentData = history.map(h => h[currentMode + '_percent'] * 100);
+                const volData = history.map(h => h.vol_24h / 1000000); 
+                const oiData = history.map(h => h.oi_usd / 1000000);
+
+                updateStats(history);
+                renderChart(labels, percentData, volData, oiData);
+                
+                // Render Index History List
+                const indexDetails = document.getElementById('index-details');
+                if (indexHistory.length > 0) {
+                    indexDetails.innerHTML = indexHistory.map(item => `
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding: 8px 0;">
+                            <span style="color: var(--text-secondary); width: 140px;">${new Date(item.timestamp * 1000).toLocaleDateString('zh-CN')}</span>
+                            <span style="flex: 1; text-align: left;">${item.price_index_info}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    indexDetails.innerText = '暂无详细构成数据';
+                }
+                
+            } catch (err) {
+                console.error("Refresh chart failed", err);
+            }
+        }
+
+        function updateStats(history) {
+            const last = history[history.length - 1];
+            const first = history[0];
+            const currentVal = last[currentMode + '_percent'] * 100;
+            const change = currentVal - (first[currentMode + '_percent'] * 100);
+            
+            document.getElementById('stat-percent').innerText = currentVal.toFixed(2) + '%';
+            const changeEl = document.getElementById('stat-change');
+            changeEl.innerText = (change >= 0 ? '+' : '') + change.toFixed(4) + '%';
+            changeEl.style.color = change >= 0 ? '#10b981' : '#ef4444';
+            document.getElementById('stat-vol').innerText = formatVol(last.vol_24h);
+            document.getElementById('stat-oi').innerText = formatVol(last.oi_usd || 0);
+        }
+
+        function renderChart(labels, percentData, volData, oiData) {
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            
+            if (chart) chart.destroy();
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: currentMode === 'top10' ? '前10持仓比例 (%)' : '前100持仓比例 (%)',
+                            data: percentData,
+                            borderColor: currentMode === 'top10' ? '#f59e0b' : '#10b981',
+                            borderWidth: 3,
+                            pointRadius: 2,
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: '合约持仓 OI (M)',
+                            data: oiData,
+                            borderColor: '#38bdf8',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            tension: 0.1,
+                            yAxisID: 'y2'
+                        },
+                        {
+                            label: '24h 合约交易额 (M)',
+                            data: volData,
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            borderColor: '#6366f1',
+                            borderWidth: 1,
+                            fill: true,
+                            yAxisID: 'y1',
+                            type: 'bar'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false, drawBorder: false },
+                            ticks: { color: '#94a3b8', font: { size: 10 } }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false },
+                            ticks: { color: '#f8fafc' },
+                            title: { display: true, text: '持仓比例 %', color: '#f8fafc' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#6366f1' },
+                            title: { display: true, text: '交易额 (M)', color: '#6366f1' }
+                        },
+                        y2: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#38bdf8' },
+                            title: { display: true, text: '持仓 OI (M)', color: '#38bdf8' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { color: '#f8fafc', boxWidth: 10 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function formatVol(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(2) + 'K';
+            return num.toFixed(0);
+        }
+
+        // Init
+        fetchTokens();
+        setInterval(fetchTokens, 60000); // 1 minute refresh
+    </script>
+</body>
+</html>

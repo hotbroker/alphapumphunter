@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>大哥的持仓监控仪表盘</title>
+    <link rel="icon" type="image/png" href="static/logo.png">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -50,13 +51,71 @@
         .sidebar-header {
             padding: 24px;
             border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sidebar-header img {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            object-fit: cover;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
         }
 
         .sidebar-header h1 {
-            font-size: 1.25rem;
+            font-size: 1.15rem;
             font-weight: 700;
             color: var(--accent-color);
             letter-spacing: -0.025em;
+        }
+
+        .sidebar-search {
+            padding: 0 16px 16px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-color);
+        }
+
+        .sidebar-sort {
+            padding: 12px 16px;
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sort-btn {
+            flex: 1;
+            padding: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .sort-btn.active {
+            background: var(--active-bg);
+            color: var(--accent-color);
+            border-color: var(--accent-color);
         }
 
         #token-list {
@@ -226,7 +285,15 @@
 
     <aside id="sidebar">
         <div class="sidebar-header">
-            <h1>大哥 · 持仓监控</h1>
+            <img src="static/logo.png" alt="Logo">
+            <h1>Alpha Pump Hunter</h1>
+        </div>
+        <div class="sidebar-search">
+            <input type="text" id="search-input" class="search-input" placeholder="搜索币名..." oninput="handleSearch(this.value)">
+        </div>
+        <div class="sidebar-sort">
+            <button id="sort-vol" class="sort-btn active" onclick="setSort('vol')">交易量</button>
+            <button id="sort-percent" class="sort-btn" onclick="setSort('percent')">前100占比</button>
         </div>
         <div id="token-list">
             <!-- Tokens injected here -->
@@ -279,6 +346,8 @@
         let tokens = [];
         let currentSymbol = null;
         let currentMode = 'top100'; // 'top10', 'top100', 'bnalpha'
+        let sortMode = 'vol'; // 'vol' or 'percent'
+        let searchQuery = '';
         let chart = null;
 
         async function fetchTokens() {
@@ -297,10 +366,18 @@
 
         function renderTokenList() {
             const list = document.getElementById('token-list');
-            // 按 vol_24h 从大到小排序
-            const sortedTokens = [...tokens].sort((a, b) => (b.vol_24h || 0) - (a.vol_24h || 0));
+            
+            // 过滤
+            let filtered = tokens.filter(t => t.symbol.toLowerCase().includes(searchQuery.toLowerCase()));
+            
+            // 排序
+            if (sortMode === 'vol') {
+                filtered.sort((a, b) => (b.vol_24h || 0) - (a.vol_24h || 0));
+            } else {
+                filtered.sort((a, b) => (b.top100_percent || 0) - (a.top100_percent || 0));
+            }
 
-            list.innerHTML = sortedTokens.map(t => `
+            list.innerHTML = filtered.map(t => `
                 <div class="token-item ${t.symbol === currentSymbol ? 'active' : ''}" onclick="selectToken('${t.symbol}')">
                     <div>
                         <span class="token-symbol">${t.symbol}</span>
@@ -311,6 +388,18 @@
                     </span>
                 </div>
             `).join('');
+        }
+
+        function handleSearch(val) {
+            searchQuery = val;
+            renderTokenList();
+        }
+
+        function setSort(mode) {
+            sortMode = mode;
+            document.getElementById('sort-vol').classList.toggle('active', mode === 'vol');
+            document.getElementById('sort-percent').classList.toggle('active', mode === 'percent');
+            renderTokenList();
         }
 
         async function selectToken(symbol) {
@@ -401,11 +490,11 @@
                     labels: labels,
                     datasets: [
                         {
-                            label: currentMode === 'top10' ? '前10持仓比例 (%)' : 
-                                   currentMode === 'bnalpha' ? '币安 Alpha 地址持仓 (%)' : '前100持仓比例 (%)',
+                            label: currentMode === 'top10' ? '前10持仓比例 (%)' :
+                                currentMode === 'bnalpha' ? '币安 Alpha 地址持仓 (%)' : '前100持仓比例 (%)',
                             data: percentData,
-                            borderColor: currentMode === 'top10' ? '#f59e0b' : 
-                                         currentMode === 'bnalpha' ? '#38bdf8' : '#10b981',
+                            borderColor: currentMode === 'top10' ? '#f59e0b' :
+                                currentMode === 'bnalpha' ? '#38bdf8' : '#10b981',
                             borderWidth: 3,
                             pointRadius: 2,
                             tension: 0.4,

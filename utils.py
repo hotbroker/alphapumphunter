@@ -3,11 +3,47 @@ import httpx
 import os,json
 import requests
 import threading
+from functools import wraps
+
 from typing import Deque, Dict, Iterable, List, MutableMapping, Optional, Set, Tuple
 feishu_myself = 'https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9'
 feishu_alpha = 'https://open.feishu.cn/open-apis/bot/v2/hook/0e014c3c-3891-4b65-b869-9a5aae2b1828'
 #上架alpha通知研究
 feishu_alpha_new_list = 'https://open.feishu.cn/open-apis/bot/v2/hook/d4011103-2a39-473b-befe-1ebc0c57c12f'
+
+import platform
+is_windows = platform.system().lower() == "windows"
+print(f'platform is_windows {is_windows}')
+
+
+
+def retry_on_xxx(max_retries=3, delay=2,except_code=[429]):
+    """限流重试修饰器"""
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return await func(*args, **kwargs)
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code in except_code:
+                        logger.warning(f"接口 {func.__name__} 触发限流 (429)，尝试重试 {attempt + 1}/{max_retries}")
+                        await asyncio.sleep(delay)
+                        last_exception = e
+                        continue
+                    raise e
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise e
+                    logger.debug(f"接口 {func.__name__} 尝试失败 {attempt + 1}: {e}")
+                    await asyncio.sleep(1)
+                    last_exception = e
+            if last_exception:
+                raise last_exception
+        return wrapper
+    return decorator
+
 
 def format_big_number(num):
     num = float(num)
@@ -419,7 +455,7 @@ def test_gmgn_cookie_ok(headersparams, cookiesparams):
     print(response.text[:1000])
     return response
 
-
+@retry_on_xxx(max_retries=3, delay=2,except_code=[429])
 async def get_index_constituents(symbol: str) -> str:
     """获取币安合约指数构成，返回前3大成分的格式化字符串"""
     if not symbol:
@@ -436,7 +472,7 @@ async def get_index_constituents(symbol: str) -> str:
     }
     
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=5) as client:
             r = await client.get(url, headers=headers)
             if r.status_code != 200:
                 return ""
@@ -460,7 +496,7 @@ async def get_index_constituents(symbol: str) -> str:
             return "指数成份: " + ", ".join(parts)
             
     except Exception as e:
-        logger.warning(f"Failed to get index constituents for {symbol_upper}: {e}")
+        logger.opt(exception=True).warning(f"Failed to get index constituents for {symbol_upper}: {e}")
         return ""
 
 
@@ -511,7 +547,8 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
     if not chainid:
         return None
     url=f'https://gmgn.ai/api/v1/token_trends/{chainid}/{contract_address}?trends_type=avg_holding_balance&trends_type=holder_count&trends_type=top10_holder_percent&trends_type=top100_holder_percent'
-    
+    if is_windows:
+        url = url.replace('https://gmgn.ai', 'http://43.163.209.171:8812')
     headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'Accept': 'application/json',
@@ -520,6 +557,8 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
     try:
         print(url)
         newurl = f'https://gmgn.ai/vas/api/v1/token_holders/{chainid}/{contract_address}?limit=100&cost=20&orderby=amount_percentage&direction=desc'
+        if is_windows:
+            newurl = newurl.replace('https://gmgn.ai', 'http://43.163.209.171:8812')
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, headers=headers)
             r.raise_for_status()

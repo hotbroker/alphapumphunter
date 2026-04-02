@@ -169,16 +169,24 @@ async def check_for_alerts():
                     elif stats['max_100'] - curr_100 >= 0.15:
                         trigger_reason = f"Top 100 较 60 天最高点减少了 {(stats['max_100'] - curr_100)*100:.1f}%"
                         base_10, base_100, base_source = stats['max_10'], stats['max_100'], "60天高点"
-                
+                    # 有时候可能是90%左右，拉到 99%+，这时候用0.15就没法满足
+                    if curr_10>=0.99 and stats['max_10']<0.95:
+                        trigger_reason = f"Top 10 较 60 天最高点增加了 {(curr_10 - stats['max_10'])*100:.1f}%，达到{curr_10*100:.1f}%"
+                        base_10, base_100, base_source = stats['max_10'], stats['max_100'], "60天高点"
+                    elif curr_100>=0.99 and stats['max_100']<0.95:
+                        trigger_reason = f"Top 100 较 60 天最高点增加了 {(curr_100 - stats['max_100'])*100:.1f}%，达到{curr_100*100:.1f}%"
+                        base_10, base_100, base_source = stats['max_10'], stats['max_100'], "60天高点"
                 if trigger_reason:
                     # 触发告警
+                    diff_10 = curr_10 - base_10
+                    diff_100 = curr_100 - base_100
                     alert_msg = (
                         f"🚨【持仓集中度异动告警】🚨\n"
                         f"币种: {symbol}\n"
                         f"原因: {trigger_reason}\n\n"
                         f"📈 当前持仓比例:\n"
-                        f"- Top 10: {curr_10*100:.2f}%\n"
-                        f"- Top 100: {curr_100*100:.2f}%\n"
+                        f"- Top 10: {curr_10*100:.2f}% ({diff_10*100:+.2f}%)\n"
+                        f"- Top 100: {curr_100*100:.2f}% ({diff_100*100:+.2f}%)\n"
                         f"- 24h 交易额: {utils.format_big_number(current['vol_24h'] or 0)}\n"
                         f"- 合约持仓(OI): {utils.format_big_number(current['oi_usd'] or 0)}\n\n"
                         f"📉 基准参考 ({base_source}):\n"

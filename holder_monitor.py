@@ -95,6 +95,7 @@ class HolderDB:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('DELETE FROM monitored_tokens WHERE symbol = ?', (symbol.upper(),))
+                cursor.execute('DELETE FROM holder_records WHERE symbol = ?', (symbol.upper(),))
                 conn.commit()
             return True
         except Exception as e:
@@ -206,6 +207,10 @@ async def auto_update_monitored_list(db: HolderDB, threshold: float):
             if vol_24h >= threshold:
                 ca = item.get("contractAddress")
                 chain = item.get("chainName")
+                holder_list = await utils.get_holders_list(ca, chain)
+                if holder_list and len(holder_list) <100:
+                    logger.warning(f"Auto-scan skip {sym} {ca} {chain} (holder list < 100)")
+                    continue
                 if ca and chain:
                     db.add_token(sym, ca, chain, vol_24h)
                     newly_added.append(sym)

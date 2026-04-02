@@ -586,3 +586,33 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get holders count for {contract_address}: {e}")
         return None
+
+async def get_holders_list(contract_address: str,alphachainName) -> dict:
+    chainName={
+        'Solana':'sol',
+        'BSC':'bsc',
+        'Base':'base',
+        'Ethereum':'eth',
+    }
+    chainid = chainName.get(alphachainName,'')
+    if not chainid:
+        return None
+    url=f'https://gmgn.ai/vas/api/v1/token_holders/{chainid}/{contract_address}?limit=100&cost=20&orderby=amount_percentage&direction=desc'
+    if is_windows:
+        url = url.replace('https://gmgn.ai', 'http://43.163.209.171:8812')
+    headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
+    'Connection': 'keep-alive',
+}
+    try:
+        print(url)
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            js = r.json()
+            results = js.get("data",{}).get("list",[])
+            return results
+    except Exception as e:
+        logger.opt(exception=True).warning(f"Failed to get holders count for {contract_address}: {e}")
+        return None

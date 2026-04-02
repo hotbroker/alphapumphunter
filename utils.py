@@ -504,7 +504,7 @@ async def get_index_constituents(symbol: str) -> str:
 
 
 async def get_holders_info2(url,datalist=['top100_holder_percent','top10_holder_percent']) -> dict:
-    #logger.info(f'get holders info from fallback url: {url}')
+    logger.info(f'get holders info from fallback url: {url}')
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json',
@@ -550,6 +550,7 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
         'Base':'base',
         'Ethereum':'eth',
     }
+    contract_address = contract_address.lower()
     chainid = chainName.get(alphachainName,'')
     if not chainid:
         return None
@@ -562,7 +563,7 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
     'Connection': 'keep-alive',
 }
     try:
-        print(url)
+        #print(url)
         newurl = f'https://gmgn.ai/vas/api/v1/token_holders/{chainid}/{contract_address}?limit=100&cost=20&orderby=amount_percentage&direction=desc'
         if is_windows:
             newurl = newurl.replace('https://gmgn.ai', 'http://43.163.209.171:8812')
@@ -581,7 +582,7 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
             slowdata = 1 
             if slowdata or  not results or top100_holder_percent>1 or top10_holder_percent>1 or top100_holder_percent==0 or top10_holder_percent==0:
                 results= await get_holders_info2(newurl,datalist)
-                logger.info(f'fix holders info for {contract_address} : {results}')
+                logger.info(f'fix holders info for {newurl} : {results}')
             if results:
                 results['cexdata'] = await get_holders_cex(newurl)
             #logger.info(f'holders info for {contract_address} : {results}')

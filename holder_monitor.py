@@ -242,7 +242,7 @@ async def monitor_step(db: HolderDB):
             try:
                 holder_info = await utils.get_holders_info(ca, chain)
                 if not holder_info:
-                    logger.warning(f"Could not get holder info for {sym}")
+                    logger.warning(f"Could not get holder info for {sym} {ca} {chain}")
                     return
 
                 top10 = float(holder_info.get('top10_holder_percent', 0))
@@ -337,8 +337,11 @@ def main():
     db = HolderDB()
 
     if args.command == "add":
-        if db.add_token(args.symbol, args.ca, args.chain, 0):
-            print(f"成功添加 {args.symbol} ({args.ca}) 到监控列表")
+        ca = args.ca
+        if ca.startswith('0x'):
+            ca = ca.lower()
+        if db.add_token(args.symbol, ca, args.chain, 0):
+            print(f"成功添加 {args.symbol} ({ca}) 到监控列表")
         else:
             print(f"添加 {args.symbol} 失败")
     elif args.command == "del":

@@ -323,6 +323,10 @@
                 <div class="stat-value" id="stat-change">--</div>
             </div>
             <div class="stat-card">
+                <div class="stat-label">周变动 (7d Δ)</div>
+                <div class="stat-value" id="stat-change-7d">--</div>
+            </div>
+            <div class="stat-card">
                 <div class="stat-label">24h 合约交易额</div>
                 <div class="stat-value" id="stat-vol">--</div>
             </div>
@@ -426,7 +430,7 @@
             if (!currentSymbol) return;
             try {
                 const [histRes, indexRes] = await Promise.all([
-                    fetch(`api/history/${currentSymbol}?hours=72`),
+                    fetch(`api/history/${currentSymbol}?hours=168`),
                     fetch(`api/index_history/${currentSymbol}`)
                 ]);
 
@@ -467,15 +471,41 @@
 
         function updateStats(history) {
             const last = history[history.length - 1];
-            const first = history[0];
-            const currentVal = last[currentMode + '_percent'] * 100;
-            const change = currentVal - (first[currentMode + '_percent'] * 100);
+            const currentVal = (last[currentMode + '_percent'] || 0) * 100;
+            
+            // 1. 今日变动 (24h) - 取 24h 前或最早的一条
+            const dayAgo = (last.timestamp || Date.now()/1000) - 86400;
+            let dayRecord = history.find(h => h.timestamp >= dayAgo);
+            if (!dayRecord) dayRecord = history[0];
+            const dayVal = (dayRecord[currentMode + '_percent'] || 0) * 100;
+            const dayChange = currentVal - dayVal;
+
+            // 2. 周变动 (7d) - 取 7d 前或最早的一条
+            const weekAgo = (last.timestamp || Date.now()/1000) - 604800;
+            let weekRecord = history.find(h => h.timestamp >= weekAgo);
+            if (!weekRecord) weekRecord = history[0];
+            const weekVal = (weekRecord[currentMode + '_percent'] || 0) * 100;
+            const weekChange = currentVal - weekVal;
 
             document.getElementById('stat-percent').innerText = currentVal.toFixed(2) + '%';
+            
+            // 更新今日变动显示
             const changeEl = document.getElementById('stat-change');
-            changeEl.innerText = (change >= 0 ? '+' : '') + change.toFixed(4) + '%';
-            changeEl.style.color = change >= 0 ? '#10b981' : '#ef4444';
-            document.getElementById('stat-vol').innerText = formatVol(last.vol_24h);
+            changeEl.innerText = (dayChange >= 0 ? '+' : '') + dayChange.toFixed(4) + '%';
+            changeEl.style.color = dayChange >= 0 ? '#10b981' : '#ef4444';
+
+            // 更新周变动显示 (显示增值和原值)
+            const change7dEl = document.getElementById('stat-change-7d');
+            change7dEl.innerHTML = `
+                <div style="color: ${weekChange >= 0 ? '#10b981' : '#ef4444'}">
+                    ${(weekChange >= 0 ? '+' : '') + weekChange.toFixed(4)}%
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 400; margin-top: 4px;">
+                    (${weekVal.toFixed(2)}%)
+                </div>
+            `;
+
+            document.getElementById('stat-vol').innerText = formatVol(last.vol_24h || 0);
             document.getElementById('stat-oi').innerText = formatVol(last.oi_usd || 0);
         }
 

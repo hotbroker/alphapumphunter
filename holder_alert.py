@@ -213,8 +213,8 @@ async def main_loop():
         except Exception as e:
             logger.error(f"Error in alert main loop: {e}")
             
-        logger.info("Check finished. Sleeping for 30 minutes...")
-        await asyncio.sleep(1800)
+        logger.info("Check finished. Sleeping for 3 minutes...")
+        await asyncio.sleep(1800/10)
 
 if __name__ == "__main__":
     try:

@@ -145,17 +145,23 @@ async def check_token(sym, token_info, alert_history):
         first_kline_time = utils.time_to_string(recent_klines[0][0] / 1000)
         last_kline_time = utils.time_to_string(recent_klines[-1][6] / 1000)
         change_list = [f"{c:.2f}%" for c in changes]
+        top10_holder_percent = float(token_info.get('top10_holder_percent', 0))
+        top100_holder_percent = float(token_info.get('top100_holder_percent', 0))
+        diff10 = top10_now - top10_holder_percent
+        diff100 = top100_now - top100_holder_percent
+        diff10_str = f"+ {diff10:.2f}%" if diff10 > 0 else f"- {abs(diff10):.2f}%"
+        diff100_str = f"+ {diff100:.2f}%" if diff100 > 0 else f"- {abs(diff100):.2f}%"
 
         msg = (
             f"🚨 高控盘横盘信号 - 拉盘前兆 {sym}\n\n"
             f"币种: {sym}\n"
-            f"上报告警时前10持有者占比: {token_info.get('top10_holder_percent', 0):.2f}%\n"
-            f"上报告警时前100持有者占比: {token_info.get('top100_holder_percent', 0):.2f}%\n"
+            f"上报告警时前10持有者占比: {top10_holder_percent:.2f}%\n"
+            f"上报告警时前100持有者占比: {top100_holder_percent:.2f}%\n"
             f"上报告警时的时间: {utils.time_to_string(token_info.get('detected_time', 0))}\n"
             f"FDV: {utils.format_big_number(float(token_info.get('fdv', 0)))}\n"
             f"市值: {utils.format_big_number(float(token_info.get('marketCap', 0)))}\n\n"
-            f"当前前10持有者占比: {top10_now:.2f}%\n"
-            f"当前前100持有者占比: {top100_now:.2f}%\n"
+            f"当前前10持有者占比: {top10_now:.2f}% ({diff10_str})\n"
+            f"当前前100持有者占比: {top100_now:.2f}% ({diff100_str})\n"
             f"{index_constituents}\n"
             f"📊 最近{KLINE_COUNT}根15分钟K线涨跌幅:\n"
             f"  {change_list}\n"

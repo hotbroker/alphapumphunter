@@ -1,10 +1,13 @@
+import hashlib
+import hmac
+import time
+import asyncio
 from loguru import logger
 import httpx
 import os,json
 import requests
 import threading
 from functools import wraps
-
 from typing import Deque, Dict, Iterable, List, MutableMapping, Optional, Set, Tuple
 feishu_myself = 'https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9'
 feishu_alpha = 'https://open.feishu.cn/open-apis/bot/v2/hook/0e014c3c-3891-4b65-b869-9a5aae2b1828'
@@ -587,17 +590,18 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
         logger.opt(exception=True).warning(f"Failed to get holders count for {contract_address}: {e}")
         return None
 
-async def get_holders_list(contract_address: str,alphachainName) -> dict:
+async def get_holders_list(contract_address: str,alphachainName,limit:int=100) -> dict:
     chainName={
         'Solana':'sol',
         'BSC':'bsc',
+        'Bsc':'bsc',
         'Base':'base',
         'Ethereum':'eth',
     }
     chainid = chainName.get(alphachainName,'')
     if not chainid:
         return None
-    url=f'https://gmgn.ai/vas/api/v1/token_holders/{chainid}/{contract_address}?limit=100&cost=20&orderby=amount_percentage&direction=desc'
+    url=f'https://gmgn.ai/vas/api/v1/token_holders/{chainid}/{contract_address}?limit={limit}&cost=20&orderby=amount_percentage&direction=desc'
     if is_windows:
         url = url.replace('https://gmgn.ai', 'http://43.163.209.171:8812')
     headers = {
@@ -616,3 +620,212 @@ async def get_holders_list(contract_address: str,alphachainName) -> dict:
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get holders count for {contract_address}: {e}")
         return None
+
+# ── CA Lookup Utilities (from test_get_ca.py) ──
+
+def load_binance_keys() -> Tuple[str, str]:
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "binanceKey.txt")
+    if not os.path.exists(path):
+        return None, None
+    with open(path, "r", encoding="utf-8") as f:
+        lines = [ln.strip() for ln in f.readlines() if ln.strip()]
+    if len(lines) < 2:
+        return None, None
+    return lines[0], lines[1]
+
+def _sign(query_string: str, secret: str) -> str:
+    return hmac.new(secret.encode('utf-8'), query_string.encode('utf-8'), hashlib.sha256).hexdigest()
+
+async def get_all_binance_coins(api_key: str, api_secret: str) -> List[dict]:
+    """币安 /sapi/v1/capital/config/getall，返回全部现货币信息"""
+    timestamp = int(time.time() * 1000)
+    query_string = f'timestamp={timestamp}&recvWindow=50000'
+    signature = _sign(query_string, api_secret)
+    url = f'https://api.binance.com/sapi/v1/capital/config/getall?{query_string}&signature={signature}'
+    headers = {'X-MBX-APIKEY': api_key, 'User-Agent': 'Mozilla/5.0'}
+    
+    async with httpx.AsyncClient(timeout=5) as client:
+        r = await client.get(url, headers=headers)
+        if r.status_code != 200:
+            print(f"get_all_binance_coins: {r.text}")
+        r.raise_for_status()
+        return r.json()
+
+def find_in_binance_coins(symbol: str, all_coins: List[dict]) -> Dict[str, str]:
+    """从币安全量数据中查合约地址，返回 {network: address}"""
+    sym = symbol.upper().replace('USDT', '')
+    for coin in all_coins:
+        if coin.get('coin', '').upper() == sym:
+            results = {}
+            for net in coin.get('networkList', []):
+                contract = net.get('contractAddress', '')
+                if contract:
+                    results[net.get('network', '')] = contract
+            return results
+    return {}
+
+
+
+
+def retry_on_429(max_retries=3, delay=2):
+    """限流重试修饰器"""
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return await func(*args, **kwargs)
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 429:
+                        logger.warning(f"接口 {func.__name__} 触发限流 (429)，尝试重试 {attempt + 1}/{max_retries}")
+                        await asyncio.sleep(delay)
+                        last_exception = e
+                        continue
+                    raise e
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise e
+                    logger.debug(f"接口 {func.__name__} 尝试失败 {attempt + 1}: {e}")
+                    await asyncio.sleep(1)
+                    last_exception = e
+            if last_exception:
+                raise last_exception
+        return wrapper
+    return decorator
+
+@retry_on_429(max_retries=3, delay=2)    
+async def get_ca_from_dexscreener(symbol: str) -> Dict[str, str]:
+    """使用 DexScreener 搜索合约地址"""
+    sym = symbol.upper().replace('USDT', '')
+    url = f'https://api.dexscreener.com/latest/dex/search?q={sym}'
+    
+    allowed_chains = ['ethereum', 'bsc', 'solana', 'base']
+    
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(url)
+            r.raise_for_status()
+            data = r.json()
+            pairs = data.get('pairs', [])
+            
+            results = {}
+            # 按流动性排序，优先找匹配 symbol 的高流动性池子
+            sorted_pairs = sorted(pairs, key=lambda x: float(x.get('liquidity', {}).get('usd', 0)), reverse=True)
+            
+            for pair in sorted_pairs:
+                if pair.get('baseToken', {}).get('symbol', '').upper() == sym:
+                    chain_id = pair.get('chainId', '').lower()
+                    # 映射链名以匹配后续逻辑
+                    chain_map = {
+                        'ethereum': 'ethereum',
+                        'bsc': 'bsc',
+                        'solana': 'solana',
+                        'base': 'base'
+                    }
+                    if chain_id in chain_map and chain_map[chain_id] not in results:
+                        results[chain_map[chain_id]] = pair['baseToken']['address']
+            
+            return results
+    except Exception as e:
+        logger.warning(f"DexScreener search failed for {sym}: {e}")
+        return {}
+
+async def get_all_futures_symbols() -> List[str]:
+    """获取所有 USDT 永续合约的币名"""
+    url = 'https://fapi.binance.com/fapi/v1/exchangeInfo'
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(url, headers=headers)
+        r.raise_for_status()
+        data = r.json()
+    
+    symbols = []
+    for s in data.get('symbols', []):
+        if s.get('quoteAsset') == 'USDT' and s.get('contractType') == 'PERPETUAL' and s.get('status') == 'TRADING':
+            symbols.append(s.get('baseAsset').upper())
+    return sorted(list(set(symbols)))
+
+async def find_contract_address(symbol: str, binance_coins: List[dict] = None, futures_symbols: List[str] = None):
+    sym = symbol.upper().replace('USDT', '')
+    
+    if binance_coins:
+        bn_results = find_in_binance_coins(sym, binance_coins)
+        if bn_results:
+            return bn_results
+    
+    try:
+        # 使用 DexScreener 代替 CoinGecko 避免频率限制
+        ds_results = await get_ca_from_dexscreener(sym)
+        return ds_results
+    except Exception as e:
+        logger.warning(f"DexScreener query failed for {sym}: {e}")
+    return {}
+
+
+def is_evm_address(address):
+    try:
+        if address.startswith('0x') and len(address) == 42:
+            return True
+        return False
+    except ValueError:
+        return False
+
+
+
+async def get_token_info(token_address,chain='bsc'):
+
+    headers = {
+        'accept': 'application/json, text/plain, */*',
+        'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        'content-type': 'application/json',
+        'origin': 'https://gmgn.ai',
+        'priority': 'u=1, i',
+        #'referer': 'https://gmgn.ai/bsc/token/0x0cf06de5527519c1b7c8272a6a8487f6f0ac898e?tab=activity',
+        'sec-ch-ua': '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
+        'sec-ch-ua-arch': '"x86"',
+        'sec-ch-ua-bitness': '"64"',
+        'sec-ch-ua-full-version': '"133.0.6943.98"',
+        'sec-ch-ua-full-version-list': '"Not(A:Brand";v="99.0.0.0", "Google Chrome";v="133.0.6943.98", "Chromium";v="133.0.6943.98"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-model': '""',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-ch-ua-platform-version': '"10.0.0"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+    }
+    if is_evm_address(token_address):
+        token_address = token_address.lower()
+    json_data = {
+        'chain': chain,
+        'addresses': [
+            token_address,
+        ],
+    }
+    
+    url = 'https://gmgn.ai/api/v1/mutil_window_token_info'
+    if is_windows:
+        url = url.replace('https://gmgn.ai', 'http://43.163.209.171:8812')
+
+    #change to async request
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.post(url, headers=headers, json=json_data)
+        #response.raise_for_status()
+        #data = response.json()
+    
+    #print(f'{response.text=}')
+    data= response.json() if response.status_code == 200 else None
+    if data and data.get('code') == 0:
+        data= data.get('data', {})
+        #sortd pool->liquidity
+        if not data:
+            return None
+        data= sorted(data, key=lambda x: float(x['pool'].get('liquidity', 0)), reverse=True)
+        data =data[0]
+        data.update(data['price'])
+        market_cap = float(data['total_supply']) * float(data['price'])
+        data['market_cap'] = market_cap
+
+        return data

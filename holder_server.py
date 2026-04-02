@@ -50,10 +50,10 @@ async def get_tokens():
             cursor = conn.cursor()
             # 获取监控列表及其最新的一条记录以展示概览
             cursor.execute('''
-                SELECT m.*, r.top10_percent, r.top100_percent, r.bnalpha_percent, r.vol_24h, r.oi_usd, r.timestamp as last_update
+                SELECT m.*, r.top10_percent, r.top100_percent, r.bnalpha_percent, r.cex_percent, r.vol_24h, r.oi_usd, r.timestamp as last_update
                 FROM monitored_tokens m
                 LEFT JOIN (
-                    SELECT symbol, top10_percent, top100_percent, bnalpha_percent, vol_24h, oi_usd, timestamp,
+                    SELECT symbol, top10_percent, top100_percent, bnalpha_percent, cex_percent, vol_24h, oi_usd, timestamp,
                            ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) as rn
                     FROM holder_records
                 ) r ON m.symbol = r.symbol AND r.rn = 1
@@ -70,7 +70,7 @@ async def get_history(symbol: str, hours: int = 48):
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT timestamp, top10_percent, top100_percent, bnalpha_percent, vol_24h, oi_usd, price_index_info
+                SELECT timestamp, top10_percent, top100_percent, bnalpha_percent, cex_percent, vol_24h, oi_usd, price_index_info
                 FROM holder_records
                 WHERE symbol = ? AND timestamp > ?
                 ORDER BY timestamp ASC

@@ -72,6 +72,9 @@ class HolderDB:
             if 'bnalpha_percent' not in columns:
                 logger.info("Migrating DB: adding bnalpha_percent column to holder_records")
                 cursor.execute('ALTER TABLE holder_records ADD COLUMN bnalpha_percent REAL')
+            if 'cex_percent' not in columns:
+                logger.info("Migrating DB: adding cex_percent column to holder_records")
+                cursor.execute('ALTER TABLE holder_records ADD COLUMN cex_percent REAL')
                 
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_records_symbol_time ON holder_records (symbol, timestamp)')
             conn.commit()
@@ -109,13 +112,13 @@ class HolderDB:
             cursor.execute('SELECT * FROM monitored_tokens')
             return [dict(row) for row in cursor.fetchall()]
 
-    def insert_record(self, symbol: str, top10: float, top100: float, bnalpha: float, vol_24h: float, oi_usd: float, index_info: str):
+    def insert_record(self, symbol: str, top10: float, top100: float, bnalpha: float, vol_24h: float, oi_usd: float, index_info: str, cex_percent: float):
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO holder_records (symbol, timestamp, top10_percent, top100_percent, bnalpha_percent, vol_24h, oi_usd, price_index_info)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (symbol.upper(), time.time(), top10, top100, bnalpha, vol_24h, oi_usd, index_info))
+                INSERT INTO holder_records (symbol, timestamp, top10_percent, top100_percent, bnalpha_percent, vol_24h, oi_usd, price_index_info, cex_percent)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (symbol.upper(), time.time(), top10, top100, bnalpha, vol_24h, oi_usd, index_info, cex_percent))
             conn.commit()
 
     def get_history(self, hours: int = 24) -> Dict[str, List[dict]]:
@@ -261,8 +264,12 @@ async def monitor_step(db: HolderDB):
                 # 4. Fetch Index Constituents
                 index_info = await utils.get_index_constituents(fapi_sym)
                 
+                # 5. Get CEX Percentage
+                cex_data = holder_info.get('cexdata', {})
+                cex_percent = sum(cex_data.values()) if cex_data else 0.0
+                
                 # Save
-                db.insert_record(sym, top10, top100, bnalpha, vol_24h, oi_usd, index_info)
+                db.insert_record(sym, top10, top100, bnalpha, vol_24h, oi_usd, index_info, cex_percent)
             except Exception as e:
                 logger.error(f"Error collecting data for {sym}: {e}")
 

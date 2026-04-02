@@ -289,7 +289,8 @@
             <h1>Alpha Pump Hunter</h1>
         </div>
         <div class="sidebar-search">
-            <input type="text" id="search-input" class="search-input" placeholder="搜索币名..." oninput="handleSearch(this.value)">
+            <input type="text" id="search-input" class="search-input" placeholder="搜索币名..."
+                oninput="handleSearch(this.value)">
         </div>
         <div class="sidebar-sort">
             <button id="sort-vol" class="sort-btn active" onclick="setSort('vol')">交易量</button>
@@ -309,7 +310,8 @@
             <div class="controls">
                 <button class="control-btn active" onclick="setMode('top100')">Top 100</button>
                 <button class="control-btn" onclick="setMode('top10')">Top 10</button>
-                <button class="control-btn" onclick="setMode('bnalpha')">Alpha Address</button>
+                <button class="control-btn" onclick="setMode('bnalpha')">BN Alpha</button>
+                <button class="control-btn" onclick="setMode('cex')">CEX</button>
             </div>
         </div>
 
@@ -317,6 +319,10 @@
             <div class="stat-card">
                 <div class="stat-label">最新持仓比例</div>
                 <div class="stat-value" id="stat-percent">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">交易所持仓 (CEX)</div>
+                <div class="stat-value" id="stat-cex">--</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">今日变动 (Δ)</div>
@@ -349,7 +355,7 @@
     <script>
         let tokens = [];
         let currentSymbol = null;
-        let currentMode = 'top100'; // 'top10', 'top100', 'bnalpha'
+        let currentMode = 'top100'; // 'top10', 'top100', 'bnalpha', 'cex'
         let sortMode = 'vol'; // 'vol' or 'percent'
         let searchQuery = '';
         let chart = null;
@@ -370,10 +376,10 @@
 
         function renderTokenList() {
             const list = document.getElementById('token-list');
-            
+
             // 过滤
             let filtered = tokens.filter(t => t.symbol.toLowerCase().includes(searchQuery.toLowerCase()));
-            
+
             // 排序
             if (sortMode === 'vol') {
                 filtered.sort((a, b) => (b.vol_24h || 0) - (a.vol_24h || 0));
@@ -420,7 +426,7 @@
             currentMode = mode;
             document.querySelectorAll('.control-btn').forEach(btn => {
                 const btnText = btn.innerText.replace(/\s+/g, '').toLowerCase();
-                const target = mode === 'bnalpha' ? 'alphaaddress' : mode;
+                const target = mode === 'bnalpha' ? 'bnalpha' : mode;
                 btn.classList.toggle('active', btnText === target);
             });
             refreshChart();
@@ -443,7 +449,7 @@
                 }
 
                 const labels = history.map(h => new Date(h.timestamp * 1000).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
-                const percentKey = currentMode + '_percent';
+                const percentKey = currentMode === 'cex' ? 'cex_percent' : currentMode + '_percent';
                 const percentData = history.map(h => h[percentKey] * 100);
                 const volData = history.map(h => h.vol_24h / 1000000);
                 const oiData = history.map(h => h.oi_usd / 1000000);
@@ -472,23 +478,27 @@
         function updateStats(history) {
             const last = history[history.length - 1];
             const currentVal = (last[currentMode + '_percent'] || 0) * 100;
-            
+
             // 1. 今日变动 (24h) - 取 24h 前或最早的一条
-            const dayAgo = (last.timestamp || Date.now()/1000) - 86400;
+            const dayAgo = (last.timestamp || Date.now() / 1000) - 86400;
             let dayRecord = history.find(h => h.timestamp >= dayAgo);
             if (!dayRecord) dayRecord = history[0];
             const dayVal = (dayRecord[currentMode + '_percent'] || 0) * 100;
             const dayChange = currentVal - dayVal;
 
             // 2. 周变动 (7d) - 取 7d 前或最早的一条
-            const weekAgo = (last.timestamp || Date.now()/1000) - 604800;
+            const weekAgo = (last.timestamp || Date.now() / 1000) - 604800;
             let weekRecord = history.find(h => h.timestamp >= weekAgo);
             if (!weekRecord) weekRecord = history[0];
             const weekVal = (weekRecord[currentMode + '_percent'] || 0) * 100;
             const weekChange = currentVal - weekVal;
 
             document.getElementById('stat-percent').innerText = currentVal.toFixed(2) + '%';
-            
+
+            // 更新 CEX 显示
+            const lastCex = (last.cex_percent || 0) * 100;
+            document.getElementById('stat-cex').innerText = lastCex.toFixed(2) + '%';
+
             // 更新今日变动显示
             const changeEl = document.getElementById('stat-change');
             changeEl.innerText = (dayChange >= 0 ? '+' : '') + dayChange.toFixed(4) + '%';
@@ -521,10 +531,12 @@
                     datasets: [
                         {
                             label: currentMode === 'top10' ? '前10持仓比例 (%)' :
-                                currentMode === 'bnalpha' ? '币安 Alpha 地址持仓 (%)' : '前100持仓比例 (%)',
+                                currentMode === 'bnalpha' ? 'Alpha 地址持仓 (%)' :
+                                    currentMode === 'cex' ? '交易所持仓 (%)' : '前100持仓比例 (%)',
                             data: percentData,
                             borderColor: currentMode === 'top10' ? '#f59e0b' :
-                                currentMode === 'bnalpha' ? '#38bdf8' : '#10b981',
+                                currentMode === 'bnalpha' ? '#38bdf8' :
+                                    currentMode === 'cex' ? '#ec4899' : '#10b981',
                             borderWidth: 3,
                             pointRadius: 2,
                             tension: 0.4,

@@ -125,14 +125,15 @@
         }
 
         .token-item {
-            padding: 12px 16px;
-            margin-bottom: 4px;
+            padding: 8px 12px;
+            margin-bottom: 2px;
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.2s;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 8px;
         }
 
         .token-item:hover {
@@ -144,10 +145,7 @@
             border-left: 4px solid var(--accent-color);
         }
 
-        .token-item div {
-            display: flex;
-            flex-direction: column;
-        }
+        /* Removed generic div column rule to fix stacking */
 
         .token-symbol {
             font-weight: 600;
@@ -157,6 +155,101 @@
         .token-vol {
             font-size: 0.75rem;
             color: var(--text-secondary);
+        }
+
+        .token-item-left {
+            display: flex;
+            flex-direction: row; /* Ensure row alignment */
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .token-info {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .token-stats {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            text-align: right;
+        }
+
+        .percent-main {
+            font-size: 0.85rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .percent-sub {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .favorite-star {
+            cursor: pointer;
+            font-size: 1rem;
+            color: #334155;
+            transition: all 0.2s;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .favorite-star.active {
+            color: #f59e0b;
+            text-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+        }
+
+        .favorite-star:hover {
+            color: #94a3b8;
+            transform: scale(1.2);
+        }
+
+        .notes-container {
+            background-color: var(--card-bg);
+            padding: 24px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            margin-top: 24px;
+        }
+
+        .notes-textarea {
+            width: 100%;
+            height: 100px;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            padding: 12px;
+            font-size: 0.9rem;
+            resize: none;
+            outline: none;
+            margin-top: 12px;
+        }
+
+        .notes-textarea:focus {
+            border-color: var(--accent-color);
+        }
+
+        .save-notes-btn {
+            margin-top: 12px;
+            padding: 8px 16px;
+            background: var(--accent-color);
+            color: var(--bg-color);
+            border: none;
+            border-radius: 6px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .save-notes-btn:hover {
+            background: var(--accent-hover);
         }
 
         /* Main Content */
@@ -295,6 +388,7 @@
         <div class="sidebar-sort">
             <button id="sort-vol" class="sort-btn active" onclick="setSort('vol')">交易量</button>
             <button id="sort-percent" class="sort-btn" onclick="setSort('percent')">前100占比</button>
+            <button id="filter-fav" class="sort-btn" onclick="toggleFavFilter()">收藏</button>
         </div>
         <div id="token-list">
             <!-- Tokens injected here -->
@@ -350,6 +444,12 @@
             <div class="info-title">价格指数构成 (Index Constituents)</div>
             <div id="index-details">暂无数据</div>
         </div>
+
+        <div class="notes-container">
+            <div class="info-title">备注 (Notes)</div>
+            <textarea id="token-notes" class="notes-textarea" placeholder="在此输入对该币种的备注..."></textarea>
+            <button class="save-notes-btn" onclick="saveNotes()">保存备注</button>
+        </div>
     </main>
 
     <script>
@@ -358,7 +458,13 @@
         let currentMode = 'top100'; // 'top10', 'top100', 'bnalpha', 'cex'
         let sortMode = 'vol'; // 'vol' or 'percent'
         let searchQuery = '';
+        let showFavoritesOnly = false;
+        let userdata = JSON.parse(localStorage.getItem('alphapumphunter_userdata') || '{}');
         let chart = null;
+
+        function saveLocalData() {
+            localStorage.setItem('alphapumphunter_userdata', JSON.stringify(userdata));
+        }
 
         async function fetchTokens() {
             try {
@@ -379,6 +485,9 @@
 
             // 过滤
             let filtered = tokens.filter(t => t.symbol.toLowerCase().includes(searchQuery.toLowerCase()));
+            if (showFavoritesOnly) {
+                filtered = filtered.filter(t => userdata[t.symbol]?.isFavorite);
+            }
 
             // 排序
             if (sortMode === 'vol') {
@@ -387,17 +496,50 @@
                 filtered.sort((a, b) => (b.top100_percent || 0) - (a.top100_percent || 0));
             }
 
-            list.innerHTML = filtered.map(t => `
+            list.innerHTML = filtered.map(t => {
+                const isFav = userdata[t.symbol]?.isFavorite || false;
+                const top100Percent = (t.top100_percent * 100).toFixed(1);
+                const top10Percent = (t.top10_percent * 100).toFixed(1);
+                const color = t.top100_percent > 0.95 ? '#ef4444' : t.top100_percent > 0.5 ? '#10b981' : '#f59e0b';
+                
+                return `
                 <div class="token-item ${t.symbol === currentSymbol ? 'active' : ''}" onclick="selectToken('${t.symbol}')">
-                    <div>
-                        <span class="token-symbol">${t.symbol}</span>
-                        <span class="token-vol">${formatVol(t.vol_24h || 0)}</span>
+                    <div class="token-item-left">
+                        <span class="favorite-star ${isFav ? 'active' : ''}" onclick="toggleFavorite('${t.symbol}', event)">★</span>
+                        <div class="token-info">
+                            <span class="token-symbol">${t.symbol}</span>
+                            <span class="token-vol">${formatVol(t.vol_24h || 0)}</span>
+                        </div>
                     </div>
-                    <span style="font-size: 0.75rem; font-weight: 700; color: ${t.top100_percent > 0.95 ? '#ef4444' : t.top100_percent > 0.5 ? '#10b981' : '#f59e0b'}">
-                        ${(t.top100_percent * 100).toFixed(1)}% <span style="font-size: 0.7rem; font-weight: 400; opacity: 0.8">(${(t.top10_percent * 100).toFixed(1)}%)</span>
-                    </span>
+                    <div class="token-stats">
+                        <span class="percent-main" style="color: ${color}">${top100Percent}%</span>
+                        <span class="percent-sub">(${top10Percent}%)</span>
+                    </div>
                 </div>
-            `).join('');
+            `;}).join('');
+        }
+
+        function toggleFavFilter() {
+            showFavoritesOnly = !showFavoritesOnly;
+            document.getElementById('filter-fav').classList.toggle('active', showFavoritesOnly);
+            renderTokenList();
+        }
+
+        function toggleFavorite(symbol, event) {
+            event.stopPropagation();
+            if (!userdata[symbol]) userdata[symbol] = { isFavorite: false, notes: '' };
+            userdata[symbol].isFavorite = !userdata[symbol].isFavorite;
+            saveLocalData();
+            renderTokenList();
+        }
+
+        function saveNotes() {
+            if (!currentSymbol) return;
+            const notes = document.getElementById('token-notes').value;
+            if (!userdata[currentSymbol]) userdata[currentSymbol] = { isFavorite: false, notes: '' };
+            userdata[currentSymbol].notes = notes;
+            saveLocalData();
+            alert("备注已保存到本地！");
         }
 
         function handleSearch(val) {
@@ -417,6 +559,7 @@
             const token = tokens.find(t => t.symbol === symbol);
             document.getElementById('current-token-name').innerText = symbol;
             document.getElementById('token-ca').innerText = `CA: ${token.ca} (${token.chain})`;
+            document.getElementById('token-notes').value = userdata[symbol]?.notes || '';
 
             renderTokenList();
             await refreshChart();

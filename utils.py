@@ -102,7 +102,11 @@ async def get_holders_cex(url) -> dict:
             #holder has name
             results = {}
             results = {h.get('name'):float(h.get("amount_percentage", 0)) for h in sorted_holders if h.get("name")}
-            logger.info(f'number of holders with name: {results}')
+            
+            resultsskiptwitter_username = {}
+            resultsskiptwitter_username = {h.get('name'):float(h.get("amount_percentage", 0)) for h in sorted_holders if (h.get("name") and not h.get("twitter_username"))}
+            logger.info(f'number of holders with name: {results} url: {url}')
+            logger.info(f'number of holders without twitter_username: {resultsskiptwitter_username} url: {url}')
             
             return results
             
@@ -489,7 +493,8 @@ async def get_index_constituents(symbol: str) -> str:
             sorted_constituents = sorted(constituents, key=lambda x: float(x.get("weight", 0)), reverse=True)
             
             # 取前3个
-            top_3 = sorted_constituents[:3]
+            top_3 = sorted_constituents
+            #top_3 = sorted_constituents[:3]
             parts = []
             for c in top_3:
                 exchange = c.get("exchange", "Unknown").capitalize()
@@ -550,7 +555,8 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
         'Base':'base',
         'Ethereum':'eth',
     }
-    contract_address = contract_address.lower()
+    if contract_address.startswith('0x'):
+        contract_address = contract_address.lower()
     chainid = chainName.get(alphachainName,'')
     if not chainid:
         return None

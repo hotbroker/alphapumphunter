@@ -157,6 +157,12 @@
             color: var(--text-secondary);
         }
 
+        .token-time {
+            font-size: 0.65rem;
+            color: #64748b;
+            margin-top: 1px;
+        }
+
         .token-item-left {
             display: flex;
             flex-direction: row; /* Ensure row alignment */
@@ -399,7 +405,10 @@
         <div class="header-actions">
             <div class="token-info-header">
                 <h2 id="current-token-name">请选择币种</h2>
-                <p id="token-ca" style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 4px;"></p>
+                <div style="display: flex; gap: 12px; align-items: center; margin-top: 4px;">
+                    <p id="token-ca" style="color: var(--text-secondary); font-size: 0.8rem;"></p>
+                    <p id="token-last-update" style="color: var(--accent-color); font-size: 0.75rem; opacity: 0.8;"></p>
+                </div>
             </div>
             <div class="controls">
                 <button class="control-btn active" onclick="setMode('top100')">Top 100</button>
@@ -501,6 +510,7 @@
                 const top100Percent = (t.top100_percent * 100).toFixed(1);
                 const top10Percent = (t.top10_percent * 100).toFixed(1);
                 const color = t.top100_percent > 0.95 ? '#ef4444' : t.top100_percent > 0.5 ? '#10b981' : '#f59e0b';
+                const relativeTime = t.last_update ? formatRelativeTime(t.last_update) : '--';
                 
                 return `
                 <div class="token-item ${t.symbol === currentSymbol ? 'active' : ''}" onclick="selectToken('${t.symbol}')">
@@ -508,7 +518,10 @@
                         <span class="favorite-star ${isFav ? 'active' : ''}" onclick="toggleFavorite('${t.symbol}', event)">★</span>
                         <div class="token-info">
                             <span class="token-symbol">${t.symbol}</span>
-                            <span class="token-vol">${formatVol(t.vol_24h || 0)}</span>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span class="token-vol">${formatVol(t.vol_24h || 0)}</span>
+                                <span class="token-time">${relativeTime}</span>
+                            </div>
                         </div>
                     </div>
                     <div class="token-stats">
@@ -559,6 +572,7 @@
             const token = tokens.find(t => t.symbol === symbol);
             document.getElementById('current-token-name').innerText = symbol;
             document.getElementById('token-ca').innerText = `CA: ${token.ca} (${token.chain})`;
+            document.getElementById('token-last-update').innerText = token.last_update ? `最后采样: ${new Date(token.last_update * 1000).toLocaleString()}` : '';
             document.getElementById('token-notes').value = userdata[symbol]?.notes || '';
 
             renderTokenList();
@@ -760,6 +774,15 @@
             if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
             if (num >= 1000) return (num / 1000).toFixed(2) + 'K';
             return num.toFixed(0);
+        }
+
+        function formatRelativeTime(timestamp) {
+            const now = Date.now() / 1000;
+            const diff = now - timestamp;
+            if (diff < 60) return '刚刚';
+            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+            return Math.floor(diff / 86400) + 'd ago';
         }
 
         // Init

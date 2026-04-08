@@ -242,12 +242,22 @@ async def monitor_step(db: HolderDB):
             
             # 1. Fetch Holders
             await asyncio.sleep(0.5) # Anti-ban delay
+            trycnt=10   
+            while trycnt>0:
+                try:
+                    holder_info = await utils.get_holders_info(ca, chain)
+                    if not holder_info:
+                        logger.warning(f"Could not get holder info for {sym} {ca} {chain}")
+                        return
+                    break
+                except Exception as e:
+                    trycnt-=1
+                    logger.error(f"Error collecting data for {sym}: {e}")
+                    if trycnt>0:
+                        await asyncio.sleep(1)
+                    else:
+                        return
             try:
-                holder_info = await utils.get_holders_info(ca, chain)
-                if not holder_info:
-                    logger.warning(f"Could not get holder info for {sym} {ca} {chain}")
-                    return
-
                 top10 = float(holder_info.get('top10_holder_percent', 0))
                 top100 = float(holder_info.get('top100_holder_percent', 0))
                 bnalpha = float(holder_info.get('bnalpha_holdings', 0)) # Using the field user added in utils.py

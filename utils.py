@@ -518,6 +518,9 @@ async def get_holders_info2(url,datalist=['top100_holder_percent','top10_holder_
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, headers=headers)
+            if r.status_code !=200:
+                logger.error(f'get holders info from fallback url: {url} failed, status code: {r.status_code},text {r.text}')
+                return None
             r.raise_for_status()
             js = r.json()
             holder_list = js.get("data", {}).get("list", [])
@@ -574,9 +577,10 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
         if is_windows:
             newurl = newurl.replace('https://gmgn.ai', 'http://43.163.209.171:8812')
         async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(url, headers=headers)
-            r.raise_for_status()
-            js = r.json()
+            # r = await client.get(url, headers=headers) #
+            # r.raise_for_status()
+            # js = r.json()
+            js = {}
             trends= js.get("data",{}).get("trends",{})
             results = {}
             for dt in datalist:
@@ -585,7 +589,7 @@ async def get_holders_info(contract_address: str,alphachainName,datalist=['top10
                     results[dt] = vallist[-1]['value'] if vallist else 0
             top100_holder_percent = float(results.get('top100_holder_percent',0))
             top10_holder_percent = float(results.get('top10_holder_percent',0))
-            slowdata = 1 
+            slowdata = 1 #用这个接口的话就不要用上面的了，不然调用太多，容易rate limit
             if slowdata or  not results or top100_holder_percent>1 or top10_holder_percent>1 or top100_holder_percent==0 or top10_holder_percent==0:
                 results= await get_holders_info2(newurl,datalist)
                 logger.info(f'fix holders info for {newurl} : {results}')

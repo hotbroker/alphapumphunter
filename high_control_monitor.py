@@ -117,6 +117,7 @@ async def check_token(sym, token_info, alert_history):
     max_change = max(changes)
     if max_change>2:
         return False
+    nochange = [c for c in changes if c<0.01]
     bigchangelist = [c for c in changes if c>1.5]
     if len(bigchangelist)>1:
         return False
@@ -176,6 +177,8 @@ async def check_token(sym, token_info, alert_history):
         logger.info(f"🚨 {sym} 触发高控盘横盘告警！平均涨跌幅 {avg_change:.3f}%")
 
         # 更新告警历史
+        if len(nochange)==len(changes):
+            now = now+3600*24*1000*1000 #有些币下架了
         alert_history[sym] = {
             "last_alert_time": now,
             "avg_change": avg_change,

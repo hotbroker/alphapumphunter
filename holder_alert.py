@@ -154,19 +154,19 @@ async def check_for_alerts():
                     
                     if not stats or stats['min_10'] is None:
                         continue
-                    
+                    changelimit = 0.03
                     # 检查 Top 10
-                    if curr_10 - stats['min_10'] >= 0.15:
+                    if curr_10 - stats['min_10'] >= changelimit:
                         trigger_reason = f"Top 10 较 60 天最低点增加了 {(curr_10 - stats['min_10'])*100:.1f}%"
                         base_10, base_100, base_source = stats['min_10'], stats['min_100'], "60天低点"
-                    elif stats['max_10'] - curr_10 >= 0.15:
+                    elif stats['max_10'] - curr_10 >= changelimit:
                         trigger_reason = f"Top 10 较 60 天最高点减少了 {(stats['max_10'] - curr_10)*100:.1f}%"
                         base_10, base_100, base_source = stats['max_10'], stats['max_100'], "60天高点"
                     # 检查 Top 100
-                    elif curr_10 - stats['min_100'] >= 0.15:
+                    elif curr_10 - stats['min_100'] >= changelimit:
                         trigger_reason = f"Top 100 较 60 天最低点增加了 {(curr_10 - stats['min_100'])*100:.1f}%"
                         base_10, base_100, base_source = stats['min_10'], stats['min_100'], "60天低点"
-                    elif stats['max_100'] - curr_100 >= 0.15:
+                    elif stats['max_100'] - curr_100 >= changelimit:
                         trigger_reason = f"Top 100 较 60 天最高点减少了 {(stats['max_100'] - curr_100)*100:.1f}%"
                         base_10, base_100, base_source = stats['max_10'], stats['max_100'], "60天高点"
                     # 有时候可能是90%左右，拉到 99%+，这时候用0.15就没法满足

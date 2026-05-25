@@ -569,7 +569,15 @@ def test_gmgn_cookie_ok(headersparams, cookiesparams):
 
 @sync_retry_on_xxx(max_retries=3, delay=2,except_code=[429])
 def get_twitter_from_GMGN():
-
+    gmgn_Bearer = ''
+    try:
+        if os.path.exists('gmgn_authorization.txt'):
+            with open('gmgn_authorization.txt', 'r') as f:
+                gmgn_Bearer = f.read().strip()
+        else:
+            logger.error(f"获取 GMGN authorization 失败: gmgn_authorization.txt 不存在")
+    except Exception as e:
+        logger.error(f"获取 GMGN authorization 失败: {e}")
     cookies = {
         '_did': 'fe74ec9540a255b04ec331434177e5ea',
         '_ga': 'GA1.1.2044110363.1779676776',
@@ -645,6 +653,11 @@ def get_twitter_from_GMGN():
     params.update(Gparams)
     cookies.update(Gcookies)
     headers.update(Gheaders)
+    if gmgn_Bearer:
+        gmgn_authorization = f'Bearer {gmgn_Bearer}'
+        if gmgn_Bearer.startswith('Bearer'):
+            gmgn_authorization = gmgn_Bearer
+        headers['authorization'] = gmgn_authorization    
     url='https://gmgn.ai/vas/api/v1/twitter/messages'
     if is_windows:
         url = url.replace('https://gmgn.ai', 'http://43.163.209.171:8812')

@@ -47,11 +47,14 @@ def refreshtoken():
     }
 
     json_data = {
-        'refresh_token': 'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZGRyZXNzIjoiMnVjckVtRUd2WkhzMzdzampONFBQdFRRYk5pZ2M1b0xOb1p2NmNnUW1uZkQiLCJhdWQiOiJnbWduLmFpL3JlZnJlc2giLCJjaGFpbiI6InNvbCIsImRhdGEiOnsiYWRkcmVzcyI6IjJ1Y3JFbUVHdlpIczM3c2pqTjRQUHRUUWJOaWdjNW9MTm9adjZjZ1FtbmZEIiwiYXBwIjoiZ21nbiIsImNoYWluIjoic29sIiwiY2xpZW50X2lkIjoiZ21nbl93ZWJfMjAyNjA1MjQtMzQ3LTFhNzRlYTciLCJkZXZpY2VfaWQiOiIyNGRhZmE4Yy1hNjk4LTQ1ZGItYTAzOS1mNjk2NTdiYjQ5NGIiLCJmYXRoZXJfaWQiOiIiLCJmaW5nZXJwcmludCI6InYxMTJjYzA1NjZhMjExYjJlOWZiYmM2OTQ3OGU1NmI1OTEiLCJwbGF0Zm9ybSI6IndlYiIsInVzZXJfaWQiOiI5YmNjOWE3YmQtMjgzZTctMjhkMmYtZWY0MjMtMjU1MDZkMTkifSwiZXhwIjoxNzgyMjY4NzgyLCJpYXQiOjE3Nzk2NzY3ODIsImlzcyI6ImdtZ24uYWkvc2lnbmVyIiwianRpIjoiNWY4Y2Y4ZmMtYTk0Yy00YmQ1LWE1ZDItMmEzYWRkNDU0YWM1IiwibmJmIjoxNzc5Njc2NzgyLCJzdWIiOiJnbWduLmFpL3JlZnJlc2giLCJ2ZXIiOiIxLjAiLCJ2ZXJzaW9uIjoiMi4wIn0.-y9sTb0usnEi01kx7dfJBJSddaP_7PHQrGGtBVakX0cHAnu6cMJhY5en-caBCq2a0p-yyi7lWn0qW1Rl_KvJXg',
+        'refresh_token': "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZGRyZXNzIjoiMnVjckVtRUd2WkhzMzdzampONFBQdFRRYk5pZ2M1b0xOb1p2NmNnUW1uZkQiLCJhdWQiOiJnbWduLmFpL3JlZnJlc2giLCJjaGFpbiI6InNvbCIsImRhdGEiOnsiYWRkcmVzcyI6IjJ1Y3JFbUVHdlpIczM3c2pqTjRQUHRUUWJOaWdjNW9MTm9adjZjZ1FtbmZEIiwiYXBwIjoiZ21nbiIsImNoYWluIjoic29sIiwiY2xpZW50X2lkIjoiZ21nbl93ZWJfMjAyNjA1MjQtMzQ3LTFhNzRlYTciLCJkZXZpY2VfaWQiOiIyNGRhZmE4Yy1hNjk4LTQ1ZGItYTAzOS1mNjk2NTdiYjQ5NGIiLCJmYXRoZXJfaWQiOiIiLCJmaW5nZXJwcmludCI6InYxMTJjYzA1NjZhMjExYjJlOWZiYmM2OTQ3OGU1NmI1OTEiLCJwbGF0Zm9ybSI6IndlYiIsInVzZXJfaWQiOiI5YmNjOWE3YmQtMjgzZTctMjhkMmYtZWY0MjMtMjU1MDZkMTkifSwiZXhwIjoxNzgyMjcxODc1LCJpYXQiOjE3Nzk2Nzk4NzUsImlzcyI6ImdtZ24uYWkvc2lnbmVyIiwianRpIjoiM2I3ZWZjZjUtZGRkMS00YmNlLWE4NDEtOTE2MDk5YWJmN2Q5IiwibmJmIjoxNzc5Njc5ODc1LCJzdWIiOiJnbWduLmFpL3JlZnJlc2giLCJ2ZXIiOiIxLjAiLCJ2ZXJzaW9uIjoiMi4wIn0.4MBfHbUC4b_nDVBD1J6r-ErrVAGbWS7l0v5HJsgn58hAQa5yDmArr00eCMQYWkB4S15v_EgBLXiwuZRWZK7xIQ"
     }
+    url='https://gmgn.ai/account/account/refresh_access_token'
+    if utils.is_windows:
+        url = url.replace('https://gmgn.ai', 'http://43.163.209.171:8812')
 
     response = requests.post(
-        'https://gmgn.ai/account/account/refresh_access_token',
+        url,
         params=params,
         cookies=cookies,
         headers=headers,
@@ -59,18 +62,7 @@ def refreshtoken():
     )
     print(response.text)
     return response
-
-    # Note: json_data will not be serialized by requests
-    # exactly as it was in the original request.
-    #data = '{"refresh_token":"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJnbWduLmFpL3JlZnJlc2giLCJkYXRhIjp7InVzZXJfaWQiOiJlNTI3Y2EyYy03YmJjLTQ1NWMtODEzYi0xOGZkM2MzNTNkMWEiLCJjbGllbnRfaWQiOiJnbWduX3dlYl8yMDI2MDEwNi05NTc4LTAxOThkNTciLCJkZXZpY2VfaWQiOiIxNjUwYjYyZC00Y2FmLTQzNjYtYmVhZS1lYzY0YjJlODk2MTEiLCJmYXRoZXJfaWQiOiIiLCJmaW5nZXJwcmludCI6InYxNjQxNTA2MDI4YWMxZTFjNGQwZDQwOTNjMjkxYTRhOTYiLCJhcHAiOiJnbWduIiwicGxhdGZvcm0iOiJ3ZWIifSwiZXhwIjoxNzcwMzE1ODcxLCJpYXQiOjE3Njc3MjM4NzEsImlzcyI6ImdtZ24uYWkvc2lnbmVyIiwianRpIjoiY2NkNDAxNTMtZGNhMy00ODNhLWEyZWMtNTZmOThlODU0ODA2IiwibmJmIjoxNzY3NzIzODcxLCJzdWIiOiJnbWduLmFpL3JlZnJlc2giLCJ1c2VyX2lkIjoiZTUyN2NhMmMtN2JiYy00NTVjLTgxM2ItMThmZDNjMzUzZDFhIiwidmVyIjoiMS4wIn0.uKjQeM3r4Veen1GVV5_oBRb-UwOSlWdzpPlgnbCa000KxuCWGeLbzAKXEDs6JHBVYiNPX30f90FmWNWM1T_Cyg"}'
-    #response = requests.post(
-    #    'https://gmgn.ai/account/account/refresh_access_token',
-    #    params=params,
-    #    cookies=cookies,
-    #    headers=headers,
-    #    data=data,
-    #)
-    #     
+ 
 
 last_check_time = 0
 def checktoken():
@@ -86,7 +78,7 @@ def checktoken():
   "data": {
     "data": {
       "expire_at": 1768500046,
-      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJnbWduLmFpL2FjY2VzcyIsImRhdGEiOnsidXNlcl9pZCI6ImU1MjdjYTJjLTdiYmMtNDU1Yy04MTNiLTE4ZmQzYzM1M2QxYSIsImNsaWVudF9pZCI6ImdtZ25fd2ViXzIwMjYwMTA2LTk1NzgtMDE5OGQ1NyIsImRldmljZV9pZCI6IjE2NTBiNjJkLTRjYWYtNDM2Ni1iZWFlLWVjNjRiMmU4OTYxMSIsImZhdGhlcl9pZCI6ImNjZDQwMTUzLWRjYTMtNDgzYS1hMmVjLTU2Zjk4ZTg1NDgwNiIsImZpbmdlcnByaW50IjoidjE2NDE1MDYwMjhhYzFlMWM0ZDBkNDA5M2MyOTFhNGE5NiIsImFwcCI6ImdtZ24iLCJwbGF0Zm9ybSI6IndlYiJ9LCJleHAiOjE3Njg1MDAwNDYsImlhdCI6MTc2ODQ5ODI0NiwiaXNzIjoiZ21nbi5haS9zaWduZXIiLCJqdGkiOiJhNTY0ZDE4Yy01ZDJhLTRhMzAtOGYxMi02MWU2MDhkNzFiYTciLCJuYmYiOjE3Njg0OTgyNDYsInN1YiI6ImdtZ24uYWkvYWNjZXNzIiwidXNlcl9pZCI6ImU1MjdjYTJjLTdiYmMtNDU1Yy04MTNiLTE4ZmQzYzM1M2QxYSIsInZlciI6IjEuMCJ9.Ob-09ddxHZeHTWeN8Tu87GpQJCDs5CBpRplbi3jxLwnYDEMYsO4B0iFktXdxtgdSSW3EXQ1SiflFaQT54f-k8Q"
+      "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZGRyZXNzIjoiMnVjckVtRUd2WkhzMzdzampONFBQdFRRYk5pZ2M1b0xOb1p2NmNnUW1uZkQiLCJhdWQiOiJnbWduLmFpL3JlZnJlc2giLCJjaGFpbiI6InNvbCIsImRhdGEiOnsiYWRkcmVzcyI6IjJ1Y3JFbUVHdlpIczM3c2pqTjRQUHRUUWJOaWdjNW9MTm9adjZjZ1FtbmZEIiwiYXBwIjoiZ21nbiIsImNoYWluIjoic29sIiwiY2xpZW50X2lkIjoiZ21nbl93ZWJfMjAyNjA1MjQtMzQ3LTFhNzRlYTciLCJkZXZpY2VfaWQiOiIyNGRhZmE4Yy1hNjk4LTQ1ZGItYTAzOS1mNjk2NTdiYjQ5NGIiLCJmYXRoZXJfaWQiOiIiLCJmaW5nZXJwcmludCI6InYxMTJjYzA1NjZhMjExYjJlOWZiYmM2OTQ3OGU1NmI1OTEiLCJwbGF0Zm9ybSI6IndlYiIsInVzZXJfaWQiOiI5YmNjOWE3YmQtMjgzZTctMjhkMmYtZWY0MjMtMjU1MDZkMTkifSwiZXhwIjoxNzgyMjcxODc1LCJpYXQiOjE3Nzk2Nzk4NzUsImlzcyI6ImdtZ24uYWkvc2lnbmVyIiwianRpIjoiM2I3ZWZjZjUtZGRkMS00YmNlLWE4NDEtOTE2MDk5YWJmN2Q5IiwibmJmIjoxNzc5Njc5ODc1LCJzdWIiOiJnbWduLmFpL3JlZnJlc2giLCJ2ZXIiOiIxLjAiLCJ2ZXJzaW9uIjoiMi4wIn0.4MBfHbUC4b_nDVBD1J6r-ErrVAGbWS7l0v5HJsgn58hAQa5yDmArr00eCMQYWkB4S15v_EgBLXiwuZRWZK7xIQ"
     },
     "done": true,
     "step": 1
@@ -120,4 +112,5 @@ while 1:
     except Exception as e:
         utils.send_notification_feishu(utils.feishu_myself,f'test gmgn Exception  error:{e}', 'test_gmgn_cookie_ok')
         print(e)
+        time.sleep(10)
 

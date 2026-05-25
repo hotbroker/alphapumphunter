@@ -101,10 +101,13 @@ def analyze_tweet_with_deepseek(text: str, api_key: str) -> dict:
                 return json.loads(content_str)
             except json.JSONDecodeError:
                 logger.error(f"DeepSeek 响应解析 JSON 失败: {content_str}")
+                utils.send_notification_feishu(FEISHU_WEBHOOK, f"DeepSeek 响应解析 JSON 失败: {content_str}", "推特定价偏差警报")
         else:
             logger.error(f"DeepSeek API 异常: {response.status_code} - {response.text}")
+            utils.send_notification_feishu(FEISHU_WEBHOOK, f"DeepSeek API 异常: {response.status_code} - {response.text}", "推特定价偏差警报")
     except Exception as e:
         logger.error(f"调用 DeepSeek 发生异常: {e}")
+        utils.send_notification_feishu(FEISHU_WEBHOOK, f"调用 DeepSeek 发生异常: {e}", "推特定价偏差警报")
         
     return {"has_target": False, "has_pricing_deviation": False, "target_name": "", "reason": "", "suggestion": ""}
 

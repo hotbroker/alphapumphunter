@@ -1,3 +1,4 @@
+from collections.abc import Generator
 import hashlib
 import hmac
 import time
@@ -17,7 +18,35 @@ feishu_alpha_new_list = 'https://open.feishu.cn/open-apis/bot/v2/hook/d4011103-2
 import platform
 is_windows = platform.system().lower() == "windows"
 print(f'platform is_windows {is_windows}')
+bnalphaDeposit='0x73d8bd54f7cf5fab43fe4ef40a62d390644946db'.lower()
 
+
+def sync_retry_on_xxx(max_retries=3, delay=2,except_code=[429]):
+    """限流重试修饰器"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return  func(*args, **kwargs)
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code in except_code:
+                        logger.warning(f"接口 {func.__name__} 触发限流 (429)，尝试重试 {attempt + 1}/{max_retries}")
+                        time.sleep(delay)
+                        last_exception = e
+                        continue
+                    raise e
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise e
+                    logger.debug(f"接口 {func.__name__} 尝试失败 {attempt + 1}: {e}")
+                    time.sleep(1)
+                    last_exception = e
+            if last_exception:
+                raise last_exception
+        return wrapper
+    return decorator
 
 
 def retry_on_xxx(max_retries=3, delay=2,except_code=[429]):
@@ -394,6 +423,48 @@ def send_notification_feishu(
     thread = threading.Thread(target=sending_thread)
     thread.start()
 
+
+Gcookies = {
+        '_did': 'fe74ec9540a255b04ec331434177e5ea',
+        '_ga': 'GA1.1.2044110363.1779676776',
+        'sid': 'gmgn%7Cdc2e37e44604e7ddab47f5598a247689',
+        '_ga_UGLVBMV4Z0': 'GS1.2.1779676784453227.66453a11d073c232b87f1a738beef8e2.R4PgM5O7GTmZVAb91bp3iw%3D%3D.zolpREO8PeyXsWLqpKZWog%3D%3D.7hzi0vRwf2sKjxMjVPJIEA%3D%3D.5yAJ4aZehkUTatpj7wcYcA%3D%3D',
+        '__cf_bm': '3t4rl6LkqQwWuluPORXLkG94Qe_x9d2wF6VxBbYpbOU-1779676924.691349-1.0.1.1-A9LxJws.SiacNV1MZtr_RhjcIdi0K6wj5KxW_7WkmEtzbgKx3MSHwf27quj9RBggj.ZcmhA.0coqyjZWO2oSLDCFq4SHYU1HLfzf.UP4E1.mRrc1H8Vd.UeYtcMPX8lL',
+        '_ga_0XM0LYXGC8': 'GS2.1.s1779676776$o1$g1$t1779676926$j58$l0$h0',
+    }
+
+Gheaders = {
+        'accept': 'application/json, text/plain, */*',
+        'accept-language': 'zh-CN,zh;q=0.9',
+        'baggage': 'sentry-environment=production,sentry-release=20260524-347-1a74ea7,sentry-public_key=93c25bab7246077dc3eb85b59d6e7d40,sentry-trace_id=e1db64fc3286422b80e5c550efcc9456,sentry-org_id=4505147559706624,sentry-transaction=%2F,sentry-sampled=false,sentry-sample_rand=0.8634123707393563,sentry-sample_rate=0.0001',
+        'content-type': 'application/json',
+        'origin': 'https://gmgn.ai',
+        'priority': 'u=1, i',
+        'referer': 'https://gmgn.ai/?ref=01LaKhx0&chain=sol',
+        'sec-ch-ua': '"Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'sentry-trace': 'e1db64fc3286422b80e5c550efcc9456-9f6ff2a022eb2b9c-0',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
+        # 'cookie': '_did=fe74ec9540a255b04ec331434177e5ea; _ga=GA1.1.2044110363.1779676776; sid=gmgn%7Cdc2e37e44604e7ddab47f5598a247689; _ga_UGLVBMV4Z0=GS1.2.1779676784453227.66453a11d073c232b87f1a738beef8e2.R4PgM5O7GTmZVAb91bp3iw%3D%3D.zolpREO8PeyXsWLqpKZWog%3D%3D.7hzi0vRwf2sKjxMjVPJIEA%3D%3D.5yAJ4aZehkUTatpj7wcYcA%3D%3D; __cf_bm=3t4rl6LkqQwWuluPORXLkG94Qe_x9d2wF6VxBbYpbOU-1779676924.691349-1.0.1.1-A9LxJws.SiacNV1MZtr_RhjcIdi0K6wj5KxW_7WkmEtzbgKx3MSHwf27quj9RBggj.ZcmhA.0coqyjZWO2oSLDCFq4SHYU1HLfzf.UP4E1.mRrc1H8Vd.UeYtcMPX8lL; _ga_0XM0LYXGC8=GS2.1.s1779676776$o1$g1$t1779676926$j58$l0$h0',
+    }
+
+Gparams = {
+        'device_id': '24dafa8c-a698-45db-a039-f69657bb494b',
+        'fp_did': '12fbad38e3e0623d8d1a92eb27d5e6af',
+        'client_id': 'gmgn_web_20260524-347-1a74ea7',
+        'from_app': 'gmgn',
+        'app_ver': '20260524-347-1a74ea7',
+        'tz_name': 'Asia/Shanghai',
+        'tz_offset': '28800',
+        'app_lang': 'zh-CN',
+        'os': 'web',
+        'worker': '0',
+    }
+
 def test_gmgn_cookie_ok(headersparams, cookiesparams):
 
 
@@ -408,6 +479,12 @@ def test_gmgn_cookie_ok(headersparams, cookiesparams):
         '_ga_UGLVBMV4Z0': 'GS1.2.1768504831568985.7b96199dcfd2f38d94e1e8e97c0194cb.GQfStk7ZaaNzB1JDYHS80w%3D%3D.5N2HctwSQMVmnA%2BL%2BxY5gg%3D%3D.cMp8aYBvZ8xzv8of3P3n6g%3D%3D.BaQwbn34xaOLmtvJvSfdQQ%3D%3D',
         '__cf_bm': 'On3s_AoqZnoukRQGYj4NzVpAvAgt6UdpddhrmxRJ6vM-1768505278-1.0.1.1-Odk4AVfvMOpUSlR6P57B_AY1LpfS5Hh1kVSC5zvj3BxS4nq0MXJSf3.FwdWzGqdH2ncynixeLjLKzoD5M4rDT.K9x7LYtZWdsVK.SbXpMVY',
         '_ga_0XM0LYXGC8': 'GS2.1.s1768504376$o412$g1$t1768505309$j32$l0$h0',
+        '_did': 'fe74ec9540a255b04ec331434177e5ea',
+        '_ga': 'GA1.1.2044110363.1779676776',
+        'sid': 'gmgn%7Cdc2e37e44604e7ddab47f5598a247689',
+        '_ga_UGLVBMV4Z0': 'GS1.2.1779676784453227.66453a11d073c232b87f1a738beef8e2.R4PgM5O7GTmZVAb91bp3iw%3D%3D.zolpREO8PeyXsWLqpKZWog%3D%3D.7hzi0vRwf2sKjxMjVPJIEA%3D%3D.5yAJ4aZehkUTatpj7wcYcA%3D%3D',
+        '__cf_bm': '3t4rl6LkqQwWuluPORXLkG94Qe_x9d2wF6VxBbYpbOU-1779676924.691349-1.0.1.1-A9LxJws.SiacNV1MZtr_RhjcIdi0K6wj5KxW_7WkmEtzbgKx3MSHwf27quj9RBggj.ZcmhA.0coqyjZWO2oSLDCFq4SHYU1HLfzf.UP4E1.mRrc1H8Vd.UeYtcMPX8lL',
+        '_ga_0XM0LYXGC8': 'GS2.1.s1779676776$o1$g1$t1779676926$j58$l0$h0',        
     }
 
     headers = {
@@ -434,6 +511,21 @@ def test_gmgn_cookie_ok(headersparams, cookiesparams):
         'sentry-trace': 'bee2ef2433e5489581b2df0e9d6bb4d0-b83ebab5f4c9390e-0',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
         # 'cookie': '_ga=GA1.1.2108017409.1727160958; GMGN_LOCALE=zh-CN; GMGN_CHAIN=sol; GMGN_THEME=dark; cf_clearance=5Mq_hUr50TCMAgHcIlQx2Mnv4fWP3GL93D_hGH8vN1c-1748082928-1.2.1.1-CYTMGT8IObWtzvgfYkH5jeLaN7rCriJh7ke3MivgdiXmrxuOLf13uYmb66I0Yg5Ce97PI.gQTko7b96lofNfVS3qjtbKWKi1CoYRCG5G42.IIWsuikqccW.72DL7RLF788jzus3j5_IYo0aKT9NESESrksQd5.CIK.nZ4Zv7Hjw6Qo8l9lzItLP2yWvOjmyQw9pEe4wZCwGBx.k8G3dropyhdNyj.Un2X3hVGQMaanpyGYRqbSQeolHHMmQi6LR7l3Ci0UC0Y2WfxsDVL6v2jNub5mCP4zjecAHJjIupvRu6h7qbMCCYK6G1KbHaYx_bpqLXHezerALwC8I3OnxfN55VUzIkyTTpVY4P9QLf96Y; sid=gmgn%7Ceb0b2589bc63c06e13267c69bb2b446d; _ga_UGLVBMV4Z0=GS1.2.1768504831568985.7b96199dcfd2f38d94e1e8e97c0194cb.GQfStk7ZaaNzB1JDYHS80w%3D%3D.5N2HctwSQMVmnA%2BL%2BxY5gg%3D%3D.cMp8aYBvZ8xzv8of3P3n6g%3D%3D.BaQwbn34xaOLmtvJvSfdQQ%3D%3D; __cf_bm=On3s_AoqZnoukRQGYj4NzVpAvAgt6UdpddhrmxRJ6vM-1768505278-1.0.1.1-Odk4AVfvMOpUSlR6P57B_AY1LpfS5Hh1kVSC5zvj3BxS4nq0MXJSf3.FwdWzGqdH2ncynixeLjLKzoD5M4rDT.K9x7LYtZWdsVK.SbXpMVY; _ga_0XM0LYXGC8=GS2.1.s1768504376$o412$g1$t1768505309$j32$l0$h0',
+        'accept': 'application/json, text/plain, */*',
+        'accept-language': 'zh-CN,zh;q=0.9',
+        'baggage': 'sentry-environment=production,sentry-release=20260524-347-1a74ea7,sentry-public_key=93c25bab7246077dc3eb85b59d6e7d40,sentry-trace_id=e1db64fc3286422b80e5c550efcc9456,sentry-org_id=4505147559706624,sentry-transaction=%2F,sentry-sampled=false,sentry-sample_rand=0.8634123707393563,sentry-sample_rate=0.0001',
+        'content-type': 'application/json',
+        'origin': 'https://gmgn.ai',
+        'priority': 'u=1, i',
+        'referer': 'https://gmgn.ai/?ref=01LaKhx0&chain=sol',
+        'sec-ch-ua': '"Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'sentry-trace': 'e1db64fc3286422b80e5c550efcc9456-9f6ff2a022eb2b9c-0',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',        
     }
 
     params = {
@@ -452,7 +544,20 @@ def test_gmgn_cookie_ok(headersparams, cookiesparams):
         'hide_abnormal': 'true',
         'hide_closed': 'true',
         'hide_airdrop': 'true',
+        'device_id': '24dafa8c-a698-45db-a039-f69657bb494b',
+        'fp_did': '12fbad38e3e0623d8d1a92eb27d5e6af',
+        'client_id': 'gmgn_web_20260524-347-1a74ea7',
+        'from_app': 'gmgn',
+        'app_ver': '20260524-347-1a74ea7',
+        'tz_name': 'Asia/Shanghai',
+        'tz_offset': '28800',
+        'app_lang': 'zh-CN',
+        'os': 'web',
+        'worker': '0',        
     }
+    params.update(Gparams)
+    cookies.update(Gcookies)
+    headers.update(Gheaders)
 
     if(headersparams):
         headers = headersparams
@@ -460,6 +565,91 @@ def test_gmgn_cookie_ok(headersparams, cookiesparams):
         cookies = cookiesparams
     response = requests.get('https://gmgn.ai/td/api/v1/wallets/holdings', params=params, cookies=cookies, headers=headers)
     print(response.text[:1000])
+    return response
+
+@sync_retry_on_xxx(max_retries=3, delay=2,except_code=[429])
+def get_twitter_from_GMGN():
+
+    cookies = {
+        '_did': 'fe74ec9540a255b04ec331434177e5ea',
+        '_ga': 'GA1.1.2044110363.1779676776',
+        'sid': 'gmgn%7Ce1d24b0176c190467f25d023bee4bafc',
+        '_ga_UGLVBMV4Z0': 'GS1.2.1779677373120366.66453a11d073c232b87f1a738beef8e2.R4PgM5O7GTmZVAb91bp3iw%3D%3D.Jf8R9d1%2B81KuTd%2FOjTd2rw%3D%3D.xLD6A2Ut%2BXJWyU4Qzzgl1w%3D%3D.2FfuibdTuiiRqa79vW%2F0fA%3D%3D',
+        '_ga_0XM0LYXGC8': 'GS2.1.s1779676776$o1$g1$t1779677401$j60$l0$h0',
+        '__cf_bm': 'lqBglrbbHy6PXVnQfrnCEvK6kJz8njZ457bRbmsyo74-1779677400.6750872-1.0.1.1-UcIEm1FUMqtGs7cvT.BNuArCZIicT9IsKLcIS9EQ2QmjiVSm4gZmlbdJaXEAQbG6jNQGgXIB0CwKFSQhASJpUCeggzmZi.XsnlauR1XfrUxhtePvWyl.ekJPbpWEy2JF',
+    }
+
+    headers = {
+        'accept': 'application/json, text/plain, */*',
+        'accept-language': 'zh-CN,zh;q=0.9',
+        'authorization': 'Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZGRyZXNzIjoiMnVjckVtRUd2WkhzMzdzampONFBQdFRRYk5pZ2M1b0xOb1p2NmNnUW1uZkQiLCJhdWQiOiJnbWduLmFpL2FjY2VzcyIsImNoYWluIjoic29sIiwiZGF0YSI6eyJhZGRyZXNzIjoiMnVjckVtRUd2WkhzMzdzampONFBQdFRRYk5pZ2M1b0xOb1p2NmNnUW1uZkQiLCJhcHAiOiJnbWduIiwiY2hhaW4iOiJzb2wiLCJjbGllbnRfaWQiOiJnbWduX3dlYl8yMDI2MDUyNC0zNDctMWE3NGVhNyIsImRldmljZV9pZCI6IjI0ZGFmYThjLWE2OTgtNDVkYi1hMDM5LWY2OTY1N2JiNDk0YiIsImZhdGhlcl9pZCI6IjVmOGNmOGZjLWE5NGMtNGJkNS1hNWQyLTJhM2FkZDQ1NGFjNSIsImZpbmdlcnByaW50IjoidjExMmNjMDU2NmEyMTFiMmU5ZmJiYzY5NDc4ZTU2YjU5MSIsInBsYXRmb3JtIjoid2ViIiwidXNlcl9pZCI6IjliY2M5YTdiZC0yODNlNy0yOGQyZi1lZjQyMy0yNTUwNmQxOSJ9LCJleHAiOjE3Nzk2NzkxNzMsImlhdCI6MTc3OTY3NzM3MywiaXNzIjoiZ21nbi5haS9zaWduZXIiLCJqdGkiOiJiOTE5ZGZmMC0xODEzLTRmZjctYTA3Ni04NTQ3NGFiYTBkYWEiLCJuYmYiOjE3Nzk2NzczNzMsInN1YiI6ImdtZ24uYWkvYWNjZXNzIiwidmVyIjoiMS4wIiwidmVyc2lvbiI6IjIuMCJ9.4H8JKIHhtSNFfSWfzHsQOWXLn9L6fOXs_2tBj5FmZPy_eOk18GnFINo0m4j8Cuidq31Ymez4E1Zyj-zGTuW9Rg',
+        'baggage': 'sentry-environment=production,sentry-release=20260524-347-1a74ea7,sentry-public_key=93c25bab7246077dc3eb85b59d6e7d40,sentry-trace_id=93d11707b0464cca8d1b023f4b271f61,sentry-org_id=4505147559706624,sentry-transaction=%2F,sentry-sampled=false,sentry-sample_rand=0.21648306682204554,sentry-sample_rate=0.0001',
+        'priority': 'u=1, i',
+        'referer': 'https://gmgn.ai/?ref=01LaKhx0&chain=sol',
+        'sec-ch-ua': '"Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'sentry-trace': '93d11707b0464cca8d1b023f4b271f61-973005bce7339f1b-0',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
+        # 'cookie': '_did=fe74ec9540a255b04ec331434177e5ea; _ga=GA1.1.2044110363.1779676776; sid=gmgn%7Ce1d24b0176c190467f25d023bee4bafc; _ga_UGLVBMV4Z0=GS1.2.1779677373120366.66453a11d073c232b87f1a738beef8e2.R4PgM5O7GTmZVAb91bp3iw%3D%3D.Jf8R9d1%2B81KuTd%2FOjTd2rw%3D%3D.xLD6A2Ut%2BXJWyU4Qzzgl1w%3D%3D.2FfuibdTuiiRqa79vW%2F0fA%3D%3D; _ga_0XM0LYXGC8=GS2.1.s1779676776$o1$g1$t1779677401$j60$l0$h0; __cf_bm=lqBglrbbHy6PXVnQfrnCEvK6kJz8njZ457bRbmsyo74-1779677400.6750872-1.0.1.1-UcIEm1FUMqtGs7cvT.BNuArCZIicT9IsKLcIS9EQ2QmjiVSm4gZmlbdJaXEAQbG6jNQGgXIB0CwKFSQhASJpUCeggzmZi.XsnlauR1XfrUxhtePvWyl.ekJPbpWEy2JF',
+    }
+
+    params = {
+        'has_token': 'false',
+        'user_tags': [
+            'kol',
+            'trader',
+            'master',
+            'politics',
+            'media',
+            'companies',
+            'founder',
+            'exchange',
+            'celebrity',
+            'binance_square',
+            'exchange_listing',
+            'other',
+        ],
+        'tw_types': [
+            'tweet',
+            'repost',
+            'quote',
+            'reply',
+            'delete_post',
+            'pin',
+            'unpin',
+            'follow',
+            'unfollow',
+            'banner',
+            'photo',
+            'name',
+            'handle',
+            'description',
+        ],
+        'mine': '1',
+        'device_id': '24dafa8c-a698-45db-a039-f69657bb494b',
+        'fp_did': '12fbad38e3e0623d8d1a92eb27d5e6af',
+        'client_id': 'gmgn_web_20260524-347-1a74ea7',
+        'from_app': 'gmgn',
+        'app_ver': '20260524-347-1a74ea7',
+        'tz_name': 'Asia/Shanghai',
+        'tz_offset': '28800',
+        'app_lang': 'zh-CN',
+        'os': 'web',
+        'worker': '0',
+    }
+
+    params.update(Gparams)
+    cookies.update(Gcookies)
+    headers.update(Gheaders)
+    url='https://gmgn.ai/vas/api/v1/twitter/messages'
+    if is_windows:
+        url = url.replace('https://gmgn.ai', 'http://43.163.209.171:8812')
+
+    response = requests.get(url, params=params, cookies=cookies, headers=headers)
     return response
 
 @retry_on_xxx(max_retries=3, delay=2,except_code=[429])
@@ -536,7 +726,7 @@ async def get_holders_info2(url,datalist=['top100_holder_percent','top10_holder_
                 top100_percent = sum(float(h.get("amount_percentage", 0)) for h in top100)
                 results["top100_holder_percent"] = top100_percent 
                 for h in top100:
-                    if h.get("address", "").lower() == "0x73d8bd54f7cf5fab43fe4ef40a62d390644946db":
+                    if h.get("address", "").lower() == bnalphaDeposit:
                         results['bnalpha_holdings'] = float(h.get("amount_percentage", 0))
 
                 

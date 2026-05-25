@@ -2,55 +2,43 @@ import utils
 import alpha_diff_monitor
 import time
 
+#要把这里的配置放一份到 test_gmgn_cookie_ok 上面带G的变量，不然会出现说指纹不对
 def refreshtoken():
     import requests
-
     cookies = {
-        '_ga': 'GA1.1.421334895.1727329259',
-        'GMGN_LOCALE': 'zh-CN',
-        'GMGN_THEME': 'dark',
-        'GMGN_CHAIN': 'sol',
-        '_ga_0XM0LYXGC8': 'deleted',
-        'cf_clearance': 'gACJRZmlGc_8UJsIdeVyVV6tkogwuQ5AxkhX0m40Myc-1761628192-1.2.1.1-uiUKVGEPhDhOC9zb46Ccpz6KWI0b8Jx5fPpn1WC8yEYpNlIceMCi.HPur5qiU2VzuG1DaHGW5SHEzY1MbOjZuKaasz2go7s3ZzXPin9kvKIcLro2eJkzuhz.hp4djsKM8Vv803Ipf2gHitaGE.D1qA1uAL12RlDDKI9IpVQIbepwJF7MWw9.Iknn8hInj8tRx_8HDsOmgYnmYecgysxEr0w320vC1OkCBjAp7EyCiXk',
-        'sid': 'gmgn%7C7e674587cb1640176169e211217dfab6',
-        '_ga_UGLVBMV4Z0': 'GS1.2.1768495378402796.8193cb66cf2330ab7378027e46aececc.e%2FngVKOn51yfo4K2INr8Lg%3D%3D.yZFGzlPV9ZlZGcP2pXLEzA%3D%3D.m8Noo0%2FaOhWOdGkP01QrZA%3D%3D.uOeJTTK2IV5KWn5o83ETaw%3D%3D',
-        '__cf_bm': 'k4sItLs4vlPpF2C8c96_56RYO6crrgK9aBqzUv6PEGc-1768496503-1.0.1.1-_e7v2JpB6STlsuD8AJY6XObFmOsOnojFm68H51L0s_QSKb.c88zghSNVEpz.bS8OQhQiK78zM4PsRniR.gjU9EXH4pGRI1juNcRtWIsK3WU',
-        '_ga_0XM0LYXGC8': 'GS2.1.s1768493470$o2408$g1$t1768497146$j60$l0$h0',
+        '_did': 'fe74ec9540a255b04ec331434177e5ea',
+        '_ga': 'GA1.1.2044110363.1779676776',
+        'sid': 'gmgn%7Cdc2e37e44604e7ddab47f5598a247689',
+        '_ga_UGLVBMV4Z0': 'GS1.2.1779676784453227.66453a11d073c232b87f1a738beef8e2.R4PgM5O7GTmZVAb91bp3iw%3D%3D.zolpREO8PeyXsWLqpKZWog%3D%3D.7hzi0vRwf2sKjxMjVPJIEA%3D%3D.5yAJ4aZehkUTatpj7wcYcA%3D%3D',
+        '__cf_bm': '3t4rl6LkqQwWuluPORXLkG94Qe_x9d2wF6VxBbYpbOU-1779676924.691349-1.0.1.1-A9LxJws.SiacNV1MZtr_RhjcIdi0K6wj5KxW_7WkmEtzbgKx3MSHwf27quj9RBggj.ZcmhA.0coqyjZWO2oSLDCFq4SHYU1HLfzf.UP4E1.mRrc1H8Vd.UeYtcMPX8lL',
+        '_ga_0XM0LYXGC8': 'GS2.1.s1779676776$o1$g1$t1779676926$j58$l0$h0',
     }
 
     headers = {
         'accept': 'application/json, text/plain, */*',
-        'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        'baggage': 'sentry-environment=production,sentry-release=20260115-9909-b6161f8,sentry-public_key=93c25bab7246077dc3eb85b59d6e7d40,sentry-trace_id=0caf413e481042d6978c31ff1cd40371,sentry-org_id=4505147559706624,sentry-transaction=%2Fportfolio%2F%5Bcode%5D,sentry-sampled=false,sentry-sample_rand=0.9595062563182333,sentry-sample_rate=0.01',
-        'cache-control': 'no-cache',
+        'accept-language': 'zh-CN,zh;q=0.9',
+        'baggage': 'sentry-environment=production,sentry-release=20260524-347-1a74ea7,sentry-public_key=93c25bab7246077dc3eb85b59d6e7d40,sentry-trace_id=e1db64fc3286422b80e5c550efcc9456,sentry-org_id=4505147559706624,sentry-transaction=%2F,sentry-sampled=false,sentry-sample_rand=0.8634123707393563,sentry-sample_rate=0.0001',
         'content-type': 'application/json',
         'origin': 'https://gmgn.ai',
-        'pragma': 'no-cache',
         'priority': 'u=1, i',
-        'referer': 'https://gmgn.ai/portfolio/SisumwM3?chain=bsc&tab=holding',
-        'sec-ch-ua': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
-        'sec-ch-ua-arch': '"x86"',
-        'sec-ch-ua-bitness': '"64"',
-        'sec-ch-ua-full-version': '"143.0.7499.193"',
-        'sec-ch-ua-full-version-list': '"Google Chrome";v="143.0.7499.193", "Chromium";v="143.0.7499.193", "Not A(Brand";v="24.0.0.0"',
+        'referer': 'https://gmgn.ai/?ref=01LaKhx0&chain=sol',
+        'sec-ch-ua': '"Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"',
         'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-model': '""',
         'sec-ch-ua-platform': '"Windows"',
-        'sec-ch-ua-platform-version': '"10.0.0"',
         'sec-fetch-dest': 'empty',
         'sec-fetch-mode': 'cors',
         'sec-fetch-site': 'same-origin',
-        'sentry-trace': 'db84f83892e448eba7860b7a5e921fd6-9ffcd988675fe5e8-0',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-        # 'cookie': '_ga=GA1.1.421334895.1727329259; GMGN_LOCALE=zh-CN; GMGN_THEME=dark; GMGN_CHAIN=sol; _ga_0XM0LYXGC8=deleted; cf_clearance=gACJRZmlGc_8UJsIdeVyVV6tkogwuQ5AxkhX0m40Myc-1761628192-1.2.1.1-uiUKVGEPhDhOC9zb46Ccpz6KWI0b8Jx5fPpn1WC8yEYpNlIceMCi.HPur5qiU2VzuG1DaHGW5SHEzY1MbOjZuKaasz2go7s3ZzXPin9kvKIcLro2eJkzuhz.hp4djsKM8Vv803Ipf2gHitaGE.D1qA1uAL12RlDDKI9IpVQIbepwJF7MWw9.Iknn8hInj8tRx_8HDsOmgYnmYecgysxEr0w320vC1OkCBjAp7EyCiXk; sid=gmgn%7C7e674587cb1640176169e211217dfab6; _ga_UGLVBMV4Z0=GS1.2.1768495378402796.8193cb66cf2330ab7378027e46aececc.e%2FngVKOn51yfo4K2INr8Lg%3D%3D.yZFGzlPV9ZlZGcP2pXLEzA%3D%3D.m8Noo0%2FaOhWOdGkP01QrZA%3D%3D.uOeJTTK2IV5KWn5o83ETaw%3D%3D; __cf_bm=k4sItLs4vlPpF2C8c96_56RYO6crrgK9aBqzUv6PEGc-1768496503-1.0.1.1-_e7v2JpB6STlsuD8AJY6XObFmOsOnojFm68H51L0s_QSKb.c88zghSNVEpz.bS8OQhQiK78zM4PsRniR.gjU9EXH4pGRI1juNcRtWIsK3WU; _ga_0XM0LYXGC8=GS2.1.s1768493470$o2408$g1$t1768497146$j60$l0$h0',
+        'sentry-trace': 'e1db64fc3286422b80e5c550efcc9456-9f6ff2a022eb2b9c-0',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
+        # 'cookie': '_did=fe74ec9540a255b04ec331434177e5ea; _ga=GA1.1.2044110363.1779676776; sid=gmgn%7Cdc2e37e44604e7ddab47f5598a247689; _ga_UGLVBMV4Z0=GS1.2.1779676784453227.66453a11d073c232b87f1a738beef8e2.R4PgM5O7GTmZVAb91bp3iw%3D%3D.zolpREO8PeyXsWLqpKZWog%3D%3D.7hzi0vRwf2sKjxMjVPJIEA%3D%3D.5yAJ4aZehkUTatpj7wcYcA%3D%3D; __cf_bm=3t4rl6LkqQwWuluPORXLkG94Qe_x9d2wF6VxBbYpbOU-1779676924.691349-1.0.1.1-A9LxJws.SiacNV1MZtr_RhjcIdi0K6wj5KxW_7WkmEtzbgKx3MSHwf27quj9RBggj.ZcmhA.0coqyjZWO2oSLDCFq4SHYU1HLfzf.UP4E1.mRrc1H8Vd.UeYtcMPX8lL; _ga_0XM0LYXGC8=GS2.1.s1779676776$o1$g1$t1779676926$j58$l0$h0',
     }
 
     params = {
-    'device_id': 'f58d99b1-6a60-4fc8-b181-e01a6fca2427',
-    'fp_did': '5c6d41de35d26eaad98548f2c66762c8',
-    'client_id': 'gmgn_web_20260115-9909-b6161f8',
+        'device_id': '24dafa8c-a698-45db-a039-f69657bb494b',
+        'fp_did': '12fbad38e3e0623d8d1a92eb27d5e6af',
+        'client_id': 'gmgn_web_20260524-347-1a74ea7',
         'from_app': 'gmgn',
-        'app_ver': '20260115-9909-b6161f8',
+        'app_ver': '20260524-347-1a74ea7',
         'tz_name': 'Asia/Shanghai',
         'tz_offset': '28800',
         'app_lang': 'zh-CN',
@@ -59,8 +47,7 @@ def refreshtoken():
     }
 
     json_data = {
-        'refresh_token': 'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJnbWduLmFpL3JlZnJlc2giLCJkYXRhIjp7InVzZXJfaWQiOiJlNTI3Y2EyYy03YmJjLTQ1NWMtODEzYi0xOGZkM2MzNTNkMWEiLCJjbGllbnRfaWQiOiJnbWduX3dlYl8yMDI2MDEwNi05NTc4LTAxOThkNTciLCJkZXZpY2VfaWQiOiIxNjUwYjYyZC00Y2FmLTQzNjYtYmVhZS1lYzY0YjJlODk2MTEiLCJmYXRoZXJfaWQiOiIiLCJmaW5nZXJwcmludCI6InYxNjQxNTA2MDI4YWMxZTFjNGQwZDQwOTNjMjkxYTRhOTYiLCJhcHAiOiJnbWduIiwicGxhdGZvcm0iOiJ3ZWIifSwiZXhwIjoxNzcwMzE1ODcxLCJpYXQiOjE3Njc3MjM4NzEsImlzcyI6ImdtZ24uYWkvc2lnbmVyIiwianRpIjoiY2NkNDAxNTMtZGNhMy00ODNhLWEyZWMtNTZmOThlODU0ODA2IiwibmJmIjoxNzY3NzIzODcxLCJzdWIiOiJnbWduLmFpL3JlZnJlc2giLCJ1c2VyX2lkIjoiZTUyN2NhMmMtN2JiYy00NTVjLTgxM2ItMThmZDNjMzUzZDFhIiwidmVyIjoiMS4wIn0.uKjQeM3r4Veen1GVV5_oBRb-UwOSlWdzpPlgnbCa000KxuCWGeLbzAKXEDs6JHBVYiNPX30f90FmWNWM1T_Cyg',
-        'refresh_token': "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJnbWduLmFpL3JlZnJlc2giLCJkYXRhIjp7InVzZXJfaWQiOiI2N2IzN2MyMi00NjA2LTQ2ZmMtODUzZi0zNWMyMDhmNDRhMzYiLCJjbGllbnRfaWQiOiJnbWduX3dlYl8yMDI2MDExNS05OTA5LWI2MTYxZjgiLCJkZXZpY2VfaWQiOiJmNThkOTliMS02YTYwLTRmYzgtYjE4MS1lMDFhNmZjYTI0MjciLCJmYXRoZXJfaWQiOiIiLCJmaW5nZXJwcmludCI6InYxNjE0ZjljZTRkZTYwMTdmNTZjYjFjYjhkZDNiZjJkNTAiLCJhcHAiOiJnbWduIiwicGxhdGZvcm0iOiJ3ZWIifSwiZXhwIjoxNzcxMDk2ODMxLCJpYXQiOjE3Njg1MDQ4MzEsImlzcyI6ImdtZ24uYWkvc2lnbmVyIiwianRpIjoiYjRlN2YxYWItODMwOC00ZjlkLWIyMjAtMzBjNzg0Y2E2ZjkxIiwibmJmIjoxNzY4NTA0ODMxLCJzdWIiOiJnbWduLmFpL3JlZnJlc2giLCJ1c2VyX2lkIjoiNjdiMzdjMjItNDYwNi00NmZjLTg1M2YtMzVjMjA4ZjQ0YTM2IiwidmVyIjoiMS4wIn0.hvuK2tpr39Mqgu_LSU-tddS1Ph6pP1QHkxxDy8yFDMR4wga6thMqZInJhmTVW5Hy3vZ_R_BMu2Nqvb1Su-tAWA",
+        'refresh_token': 'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZGRyZXNzIjoiMnVjckVtRUd2WkhzMzdzampONFBQdFRRYk5pZ2M1b0xOb1p2NmNnUW1uZkQiLCJhdWQiOiJnbWduLmFpL3JlZnJlc2giLCJjaGFpbiI6InNvbCIsImRhdGEiOnsiYWRkcmVzcyI6IjJ1Y3JFbUVHdlpIczM3c2pqTjRQUHRUUWJOaWdjNW9MTm9adjZjZ1FtbmZEIiwiYXBwIjoiZ21nbiIsImNoYWluIjoic29sIiwiY2xpZW50X2lkIjoiZ21nbl93ZWJfMjAyNjA1MjQtMzQ3LTFhNzRlYTciLCJkZXZpY2VfaWQiOiIyNGRhZmE4Yy1hNjk4LTQ1ZGItYTAzOS1mNjk2NTdiYjQ5NGIiLCJmYXRoZXJfaWQiOiIiLCJmaW5nZXJwcmludCI6InYxMTJjYzA1NjZhMjExYjJlOWZiYmM2OTQ3OGU1NmI1OTEiLCJwbGF0Zm9ybSI6IndlYiIsInVzZXJfaWQiOiI5YmNjOWE3YmQtMjgzZTctMjhkMmYtZWY0MjMtMjU1MDZkMTkifSwiZXhwIjoxNzgyMjY4NzgyLCJpYXQiOjE3Nzk2NzY3ODIsImlzcyI6ImdtZ24uYWkvc2lnbmVyIiwianRpIjoiNWY4Y2Y4ZmMtYTk0Yy00YmQ1LWE1ZDItMmEzYWRkNDU0YWM1IiwibmJmIjoxNzc5Njc2NzgyLCJzdWIiOiJnbWduLmFpL3JlZnJlc2giLCJ2ZXIiOiIxLjAiLCJ2ZXJzaW9uIjoiMi4wIn0.-y9sTb0usnEi01kx7dfJBJSddaP_7PHQrGGtBVakX0cHAnu6cMJhY5en-caBCq2a0p-yyi7lWn0qW1Rl_KvJXg',
     }
 
     response = requests.post(

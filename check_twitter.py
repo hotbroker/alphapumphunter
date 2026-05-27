@@ -145,7 +145,7 @@ def analyze_tweet_with_deepseek(text: str, api_key: str) -> dict:
     )
     
     payload = {
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-pro",
         "messages": [
             {"role": "system", "content": prompt},
             {"role": "user", "content": text}
@@ -241,7 +241,7 @@ def monitor_step(processed_ids: set, api_key: str, handles: list = None) -> bool
             
         user_name = tweet.get("user", {}).get("name", "未知")
         screen_name = tweet.get("user", {}).get("screen_name", "")
-        logger.info(f"发现本地新推特待研判！推主: {user_name}(@{screen_name})")
+        logger.info(f"发现本地新推特待研判！推主: {user_name}(@{screen_name}) tweet_id {tweet_id}")
         
         # 研判分析
         analysis = analyze_tweet_with_deepseek(content_text, api_key)

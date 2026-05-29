@@ -44,6 +44,7 @@ def init_db():
         
         # 建索引，用于按 handle 快速检索
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_tweets_handle ON tweets(handle);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_tweets_tweet_id ON tweets(tweet_id);")
         
         conn.commit()
         conn.close()

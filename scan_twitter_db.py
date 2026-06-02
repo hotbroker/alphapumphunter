@@ -21,6 +21,84 @@ import utils
 
 DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "twitter_history.db")
 
+class AlertTracker:
+    def __init__(self, check_duration_secs=600):
+        self.check_duration = check_duration_secs
+        # 记录请求记录，元素为 (timestamp, is_success, detail_msg)
+        self.history = []
+        # 是否已经发送过告警，成功一次重置为 False
+        self.alert_triggered = False
+        self.webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9"
+
+    def record(self, is_success, detail_msg=""):
+        now = time.time()
+        self.history.append((now, is_success, detail_msg))
+        
+        # 清理超出 10 分钟的数据
+        cutoff = now - self.check_duration
+        self.history = [item for item in self.history if item[0] >= cutoff]
+        
+        # 检查是否满足报警条件
+        self.check_alert(now)
+
+    def check_alert(self, now):
+        if not self.history:
+            return
+
+        success_exists = any(item[1] for item in self.history)
+        failures = [item for item in self.history if not item[1]]
+        
+        if success_exists:
+            # 只要有成功，我们就重置告警触发状态
+            if self.alert_triggered:
+                logger.info("网络请求已恢复正常，发送恢复通知")
+                try:
+                    utils.send_notification_feishu(
+                        self.webhook_url,
+                        content=f"【恢复通知】推特归档扫描网络请求已恢复正常。\n恢复时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                        title="推特归档扫描恢复"
+                    )
+                except Exception as ex:
+                    logger.warning(f"发送恢复通知失败: {ex}")
+                self.alert_triggered = False
+            return
+
+        # 如果没有成功，且有失败
+        if failures:
+            earliest_fail_time = failures[0][0]
+            elapsed = now - earliest_fail_time
+            # 如果从第一次失败到现在已经过去了至少 10 分钟
+            if elapsed >= self.check_duration:
+                # 触发告警
+                if not self.alert_triggered:
+                    self.alert_triggered = True
+                    logger.warning("触发运维告警：网络请求已持续10分钟全部失败！")
+                    
+                    # 汇总最后 5 个失败原因
+                    err_msgs = []
+                    for f in failures[-5:]:
+                        time_str = datetime.fromtimestamp(f[0]).strftime("%H:%M:%S")
+                        err_msgs.append(f"[{time_str}] {f[2]}")
+                    err_msg_str = "\n".join(err_msgs)
+                    
+                    alert_content = (
+                        f"【运维告警】推特归档扫描网络请求已持续10分钟全部失败，期间无任何成功请求！\n"
+                        f"检测时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        f"持续时间: {elapsed:.1f} 秒\n"
+                        f"最近失败详情:\n{err_msg_str}"
+                    )
+                    try:
+                        utils.send_notification_feishu(
+                            self.webhook_url,
+                            content=alert_content,
+                            title="推特归档扫描故障告警"
+                        )
+                    except Exception as ex:
+                        logger.warning(f"发送告警通知失败: {ex}")
+
+# 全局警报跟踪器
+alert_tracker = AlertTracker()
+
 def init_db():
     """初始化 SQLite3 数据库，建表和 B-Tree 索引"""
     logger.info(f"正在初始化本地 SQLite 数据库: {DB_FILE}...")
@@ -122,14 +200,32 @@ def scan_and_archive() -> int:
         headers['authorization'] = token
         
     try:
-        response = requests.get(url, params=params, headers=headers, cookies=cookies, timeout=15)
-        if response.status_code != 200:
-            logger.error(f"拉取推文失败，HTTP 状态码: {response.status_code}")
+        try:
+            response = requests.get(url, params=params, headers=headers, cookies=cookies, timeout=15)
+            if response.status_code != 200:
+                fail_reason = f"HTTP status code {response.status_code}"
+                logger.error(f"拉取推文失败，HTTP 状态码: {response.status_code}")
+                alert_tracker.record(False, fail_reason)
+                return 0
+                
+            res_data = parse_response(response)
+            if res_data.get("code") != 0:
+                fail_reason = f"GMGN 接口业务失败: {res_data.get('message')}"
+                logger.error(f"GMGN 接口业务失败: {res_data.get('message')}")
+                alert_tracker.record(False, fail_reason)
+                return 0
+                
+            # 请求和解析都顺利，判定为网络请求成功
+            alert_tracker.record(True)
+        except requests.RequestException as req_err:
+            fail_reason = f"网络请求异常: {req_err}"
+            logger.error(f"拉取推文时网络异常: {req_err}")
+            alert_tracker.record(False, fail_reason)
             return 0
-            
-        res_data = parse_response(response)
-        if res_data.get("code") != 0:
-            logger.error(f"GMGN 接口业务失败: {res_data.get('message')}")
+        except Exception as parse_err:
+            fail_reason = f"解析响应异常: {parse_err}"
+            logger.error(f"解析响应出错: {parse_err}")
+            alert_tracker.record(False, fail_reason)
             return 0
             
         tweets = res_data.get("data", [])

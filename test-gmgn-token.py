@@ -1,6 +1,14 @@
+import os
+from datetime import datetime, timedelta
+from loguru import logger
 import utils
 import alpha_diff_monitor
 import time
+
+if __name__ == "__main__":
+    logger.add("log{}.log".format(os.path.basename(os.path.abspath(__file__))), rotation="1 MB",retention="3 days",level="INFO")  # Rotate logs when they reach 1 MB
+
+logger.info(f'start with file {os.path.basename(os.path.abspath(__file__))} pid {os.getpid()}@ filetime {datetime.fromtimestamp(os.path.getctime(os.path.abspath(__file__))).strftime("%Y-%m-%d, %H:%M:%S")}')
 
 #要把这里的配置放一份到 test_gmgn_cookie_ok 上面带G的变量，不然会出现说指纹不对
 def refreshtoken():
@@ -100,14 +108,19 @@ while 1:
         with open('gmgn_authorization.txt', 'r') as f:
             gmgn_Bearer = f.read().strip()
         alpha_diff_monitor.GMGN_HEADERS['Authorization'] = f'Bearer {gmgn_Bearer}'
-        checkgmgn = utils.test_gmgn_cookie_ok(alpha_diff_monitor.GMGN_HEADERS, alpha_diff_monitor.GMGN_COOKIES)
-        print(f'status code {checkgmgn.status_code}')
-        if checkgmgn.status_code != 200:
+        success = False
+        for i in range(3):
             checkgmgn = utils.test_gmgn_cookie_ok(alpha_diff_monitor.GMGN_HEADERS, alpha_diff_monitor.GMGN_COOKIES)
-            if checkgmgn.status_code != 200:
-                print('cookie is not ok')
-                utils.send_notification_feishu(utils.feishu_myself,f'test gmgn error:{checkgmgn.text[:100]}', 'test_gmgn_cookie_ok')
+            print(f'status code check {i+1}: {checkgmgn.status_code}')
+            if checkgmgn.status_code == 200:
+                success = True
                 break
+            if i < 2:
+                time.sleep(5)
+        if not success:
+            print('cookie is not ok')
+            utils.send_notification_feishu(utils.feishu_myself,f'test gmgn error:{checkgmgn.text[:100]}', 'test_gmgn_cookie_ok')
+            break
         time.sleep(10)
     except Exception as e:
         utils.send_notification_feishu(utils.feishu_myself,f'test gmgn Exception  error:{e}', 'test_gmgn_cookie_ok')

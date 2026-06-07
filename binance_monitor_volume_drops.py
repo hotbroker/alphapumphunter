@@ -156,17 +156,6 @@ async def monitor_loop():
                         )
                         logger.warning(msg)
                         await send_feishu_alert("高量币半小时剧烈回调告警", msg)
-                        
-                        # 原本的 gossip 接口回调，也一并保留作为备份通道（如不需要可只在日志打印）
-                        try:
-                            payload = {
-                                "cmd": "sendtext",
-                                "touser": "veryverybad",
-                                "msgcontent": f"高量币半小时剧烈回调告警\n{msg}",
-                            }
-                            await client.post("http://gossiphere.com:9999/cmd", json=payload, timeout=5.0)
-                        except Exception as e:
-                            logger.warning(f"gossip notify failed: {e}")
 
                         last_alert_times[symbol] = now_ts
                         save_state()

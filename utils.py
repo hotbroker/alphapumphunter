@@ -1043,3 +1043,65 @@ async def get_token_info(token_address,chain='bsc'):
         data['market_cap'] = market_cap
 
         return data
+
+
+async def get_historical_oi(symbol, period='5m', limit=100, startTime=None, endTime=None):
+    """从币安官方接口拉取历史持仓统计数据"""
+    symbol = symbol.upper()
+    if not symbol.endswith('USDT'):
+        symbol = f"{symbol}USDT"
+    url = "https://fapi.binance.com/futures/data/openInterestHist"
+    params = {
+        "symbol": symbol,
+        "period": period,
+        "limit": limit
+    }
+    if startTime:
+        params["startTime"] = startTime
+    if endTime:
+        params["endTime"] = endTime
+        
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=headers, params=params)
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        logger.warning(f"Failed to get_historical_oi for {symbol}: {e}")
+        return None
+
+
+async def get_web_oi_stats(symbol, period_minutes=5):
+    """通过大哥提供的 usnbweb Web 接口获取当前的 open interest stats"""
+    symbol = symbol.upper()
+    if not symbol.endswith('USDT'):
+        symbol = f"{symbol}USDT"
+    url = 'https://www.usnbweb.mobi/bapi/futures/v1/public/future/data/open-interest-stats'
+    headers = {
+        'accept': '*/*',
+        'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        'clienttype': 'web',
+        'content-type': 'application/json',
+        'origin': 'https://www.usnbweb.mobi',
+        'referer': f'https://www.usnbweb.mobi/zh-CN/futures/{symbol}',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
+    }
+    payload = {
+        "name": symbol,
+        "periodMinutes": period_minutes
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(url, headers=headers, json=payload)
+            r.raise_for_status()
+            js = r.json()
+            if js.get("code") == "000000" and "data" in js:
+                return js["data"]
+            return None
+    except Exception as e:
+        logger.warning(f"Failed to get_web_oi_stats for {symbol}: {e}")
+        return None
+

@@ -562,8 +562,8 @@ async def run_backtest_all(trigger_mode: str = "volume"):
         print("=================================================================\n")
 
 async def monitor_loop(trigger_mode: str = "volume"):
-    """实时监控模式"""
-    logger.info(f"================ 启动实时在线监控模式 ({trigger_mode}触发) ================")
+    """实时监控模式 - 改为监听触发信号文件 triggered_signals.json"""
+    logger.info(f"================ 启动实时在线监控模式 ({trigger_mode}触发，读取全市场文件源) ================")
     state_file = "monitor_hunter_state.json"
     state = {}
     if os.path.exists(state_file):
@@ -574,16 +574,6 @@ async def monitor_loop(trigger_mode: str = "volume"):
         except Exception as e:
             logger.error(f"Failed to load state: {e}")
             
-    # 初始化状态
-    for symbol in COINS:
-        if symbol not in state:
-            state[symbol] = {
-                "high_price": 0.0,
-                "alerted_40": False,
-                "alerted_50": False,
-                "last_trigger_time": 0.0
-            }
-            
     def save_state():
         try:
             with open(state_file, "w") as f:
@@ -591,58 +581,91 @@ async def monitor_loop(trigger_mode: str = "volume"):
         except Exception as e:
             logger.error(f"Failed to save state: {e}")
 
-    # 获取初始价格并backfill最高价
-    async with httpx.AsyncClient(timeout=15) as client:
-        for symbol in COINS:
-            if state[symbol]["high_price"] == 0.0:
-                klines = await utils.get_continuousKlines(symbol, interval='15m', limit=200)
-                if klines:
-                    max_high = max(float(k[2]) for k in klines)
-                    state[symbol]["high_price"] = max_high
-                    logger.info(f"{symbol} 实时高点初始化为: {max_high}")
-        save_state()
-
-    logger.info("进入实时监控主循环，每 60 秒轮询一次")
+    logger.info("进入全市场监控状态机循环，每 10 秒轮询一次信号文件与等待队列")
     while True:
         try:
-            for symbol in COINS:
-                # 1. 获取最新 15m K线和 5m K线
-                klines_15m = await utils.get_continuousKlines(symbol, interval='15m', limit=100)
-                klines_5m = await utils.get_continuousKlines(symbol, interval='5m', limit=100)
+            now_ts = time.time()
+            
+            # 1. 检查 triggered_signals.json 文件是否有新信号
+            signal_file = "triggered_signals.json"
+            if os.path.exists(signal_file):
+                signals = []
+                try:
+                    with open(signal_file, "r", encoding="utf-8") as f:
+                        signals = json.load(f)
+                except Exception as e:
+                    logger.error(f"读取信号文件失败: {e}")
+                    signals = []
                 
-                if not klines_15m or not klines_5m:
-                    continue
-                    
-                # 2. 获取当前最新的 Web OI stats
-                oi_data = await utils.get_web_oi_stats(symbol, period_minutes=5)
-                if not oi_data:
-                    logger.warning(f"获取 {symbol} 实时 OI 数据失败")
-                    continue
-                    
-                series_list = oi_data.get("series", [])
-                oi_list = []
-                for s in series_list:
-                    if s.get("name") == "sum_open_interest":
-                        oi_list = s.get("data", [])
-                        break
+                updated = False
+                for sig in signals:
+                    if not sig.get("processed", False):
+                        symbol = sig["symbol"]
+                        trigger_time = sig["trigger_time"]
+                        trigger_price = sig["trigger_price"]
+                        drop_pct = sig["drop_pct"]
+                        trigger_desc = sig["trigger_desc"]
                         
-                if not oi_list:
-                    logger.warning(f"未在 Web OI 接口中找到 sum_open_interest 字段")
-                    continue
-                    
-                # 最新价
-                curr_price = float(klines_5m[-1][4])
-                now_ts = time.time()
-                
-                # 1. 优先检查当前代币是否正处于触发后的 15分钟 观察期中
-                pending_time = state[symbol].get("pending_eval_time", 0.0)
+                        logger.info(f"发现新触发信号: {symbol} | 价格: {trigger_price} | 跌幅: {drop_pct*100:.2f}% | 触发时间: {datetime.fromtimestamp(trigger_time/1000).strftime('%Y-%m-%d %H:%M:%S')}")
+                        
+                        # 动态注册或更新状态机（15分钟延迟评估）
+                        state[symbol] = {
+                            "pending_eval_time": trigger_time / 1000 + 15 * 60,
+                            "trigger_price": trigger_price,
+                            "trigger_desc": trigger_desc,
+                            "trigger_ts": trigger_time - (trigger_time % (5 * 60 * 1000)), # 对齐 5m K线时间戳
+                            "actual_drop_pct": drop_pct
+                        }
+                        sig["processed"] = True
+                        updated = True
+                        
+                if updated:
+                    # 写回信号文件
+                    try:
+                        with open(signal_file, "w", encoding="utf-8") as f:
+                            json.dump(signals, f, indent=2, ensure_ascii=False)
+                    except Exception as e:
+                        logger.error(f"写回信号文件失败: {e}")
+                    save_state()
+            
+            # 2. 遍历 state 状态机，检查所有处于 pending 状态的代币
+            for symbol, info in list(state.items()):
+                pending_time = info.get("pending_eval_time", 0.0)
                 if pending_time > 0.0:
                     if now_ts >= pending_time:
-                        # 观察期结束，开始正式评估多空过滤条件
+                        # 观察期结束，正式拉取数据进行评估
                         logger.info(f"[{symbol}] 瞬间下跌回调的15分钟观察期已结束。开始进行多空过滤评估...")
+                        
+                        # 获取 15m K线和 5m K线
+                        klines_15m = await utils.get_continuousKlines(symbol, interval='15m', limit=100)
+                        klines_5m = await utils.get_continuousKlines(symbol, interval='5m', limit=100)
+                        
+                        if not klines_15m or not klines_5m:
+                            logger.warning(f"获取 {symbol} 最新 K 线失败，将在下个周期重试")
+                            continue
+                            
+                        # 获取当前最新的 Web OI stats
+                        oi_data = await utils.get_web_oi_stats(symbol, period_minutes=5)
+                        if not oi_data:
+                            logger.warning(f"获取 {symbol} 实时 OI 数据失败，将在下个周期重试")
+                            continue
+                            
+                        series_list = oi_data.get("series", [])
+                        oi_list = []
+                        for s in series_list:
+                            if s.get("name") == "sum_open_interest":
+                                oi_list = s.get("data", [])
+                                break
+                                
+                        if not oi_list:
+                            logger.warning(f"未在 Web OI 接口中找到 sum_open_interest 字段，将在下个周期重试")
+                            continue
+                            
+                        curr_price = float(klines_5m[-1][4])
+                        trigger_ts = info.get("trigger_ts")
+                        actual_drop = info.get("actual_drop_pct", 0.20)
+                        
                         short_pass, short_reason = check_short_opportunity(symbol, klines_15m, klines_5m, oi_list, use_15m_mode=True)
-                        trigger_ts = state[symbol].get("trigger_ts")
-                        actual_drop = state[symbol].get("actual_drop_pct", 0.20)
                         long_pass, long_reason = check_long_opportunity(
                             symbol, klines_15m, klines_5m, oi_list, use_15m_mode=True, 
                             trigger_drop_pct=actual_drop, trigger_ts=trigger_ts
@@ -658,9 +681,9 @@ async def monitor_loop(trigger_mode: str = "volume"):
                             reason = long_reason
                             
                         msg = (
-                            f"🔔 瞬间交易机会监测与评估结果: {symbol}\n"
-                            f"大跌触发依据: {state[symbol].get('trigger_desc', '未知')}\n"
-                            f"大跌触发价格: {state[symbol].get('trigger_price', 0.0):.4f}\n"
+                            f"🔔 瞬间交易机会全市场监测评估结果: {symbol}\n"
+                            f"大跌触发依据: {info.get('trigger_desc', '未知')}\n"
+                            f"大跌触发价格: {info.get('trigger_price', 0.0):.4f}\n"
                             f"当前决策价格: {curr_price:.4f} (已持续观察15分钟)\n"
                             f"多空决策结果: {decision}\n"
                             f"判定过滤依据: {reason if decision != 'NONE' else '未符合阴线形态或其它过滤约束'}\n"
@@ -671,64 +694,14 @@ async def monitor_loop(trigger_mode: str = "volume"):
                         if decision != "NONE":
                             await send_feishu_alert(f"🚨 瞬间机会评估下单提醒 | {symbol}", msg)
                             
-                        # 评估完成后清空等待状态，并设置2小时的冷却期
-                        state[symbol]["pending_eval_time"] = 0.0
-                        state[symbol]["last_trigger_time"] = now_ts
+                        # 评估完成后清空等待状态
+                        info["pending_eval_time"] = 0.0
                         save_state()
-                    continue
-                    
-                # 2. 如果没有等待的决策，检测是否满足大跌回调触发信号
-                trigger_signal = False
-                trigger_desc = ""
-                
-                if trigger_mode == "volume":
-                    # 实时 30m 高点回调判断 (近 6 根 5m K线)
-                    recent_6_klines = klines_5m[-6:]
-                    max_30m = max(float(x[2]) for x in recent_6_klines)
-                    drop_pct = (max_30m - curr_price) / max_30m
-                    
-                    if drop_pct >= 0.20:
-                        # 冷却判断（2小时，7200秒）
-                        last_trig = state[symbol].get("last_trigger_time", 0.0)
-                        if now_ts - last_trig >= 7200:
-                            trigger_signal = True
-                            trigger_desc = f"30m内高点({max_30m:.4f})回调达 {drop_pct*100:.2f}%"
-                            
-                elif trigger_mode == "history":
-                    # 历史最高价40%/50%回调判断
-                    if curr_price > state[symbol]["high_price"]:
-                        state[symbol]["high_price"] = curr_price
-                        state[symbol]["alerted_40"] = False
-                        state[symbol]["alerted_50"] = False
-                        save_state()
-                        continue
                         
-                    high_price = state[symbol]["high_price"]
-                    drop_pct = (high_price - curr_price) / high_price
-                    
-                    if drop_pct >= 0.50 and not state[symbol]["alerted_50"]:
-                        trigger_signal = True
-                        state[symbol]["alerted_50"] = True
-                        trigger_desc = f"历史最高价({high_price:.4f})回调达 50%"
-                    elif drop_pct >= 0.40 and not state[symbol]["alerted_40"]:
-                        trigger_signal = True
-                        state[symbol]["alerted_40"] = True
-                        trigger_desc = f"历史最高价({high_price:.4f})回调达 40%"
-                        
-                if trigger_signal:
-                    # 发现大跌触发信号，此时不立刻开单，而是开启15分钟观察期
-                    state[symbol]["pending_eval_time"] = now_ts + 15 * 60 # 15分钟后评估
-                    state[symbol]["trigger_price"] = curr_price
-                    state[symbol]["trigger_desc"] = trigger_desc
-                    state[symbol]["trigger_ts"] = int(klines_5m[-1][0])
-                    state[symbol]["actual_drop_pct"] = drop_pct
-                    logger.info(f"[{symbol}] 触发回调：{trigger_desc}。当前价格: {curr_price:.4f}。进入15分钟持续观察期...")
-                    save_state()
-                
         except Exception as e:
             logger.exception(f"实时监控主循环异常: {e}")
             
-        await asyncio.sleep(60)
+        await asyncio.sleep(10)
 
 def main():
     parser = argparse.ArgumentParser(description="瞬间机会抓取与回测脚本")

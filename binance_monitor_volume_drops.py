@@ -62,6 +62,33 @@ async def send_feishu_alert(title: str, content: str) -> None:
     except Exception as e:
         logger.error(f"Failed to send Feishu alert: {e}")
 
+def append_triggered_signal(symbol: str, trigger_ts: int, trigger_price: float, drop_pct: float, trigger_desc: str):
+    file_path = "triggered_signals.json"
+    signals = []
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                signals = json.load(f)
+        except Exception:
+            signals = []
+            
+    new_signal = {
+        "symbol": symbol,
+        "trigger_time": trigger_ts,
+        "trigger_price": trigger_price,
+        "drop_pct": drop_pct,
+        "trigger_desc": trigger_desc,
+        "processed": False
+    }
+    signals.append(new_signal)
+    
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(signals, f, indent=2, ensure_ascii=False)
+        logger.info(f"成功将信号写入文件: {symbol} | 价格: {trigger_price} | 跌幅: {drop_pct*100:.2f}%")
+    except Exception as e:
+        logger.error(f"写入信号文件失败: {e}")
+
 async def fetch_30m_high(client: httpx.AsyncClient, symbol: str) -> float:
     """获取最近6根 5m K线，计算并返回30分钟内的最高价。"""
     try:
@@ -154,8 +181,16 @@ async def monitor_loop():
                             f"当前跌幅: {drop_pct * 100:.2f}% (>= {DROP_THRESHOLD * 100:.0f}%)\n"
                             f"告警时间: {datetime.fromtimestamp(now_ts).strftime('%Y-%m-%d %H:%M:%S')}"
                         )
-                        logger.warning(msg)
                         await send_feishu_alert("高量币半小时剧烈回调告警", msg)
+
+                        clean_symbol = symbol.replace("USDT", "")
+                        append_triggered_signal(
+                            symbol=clean_symbol,
+                            trigger_ts=int(now_ts * 1000),
+                            trigger_price=current_price,
+                            drop_pct=drop_pct,
+                            trigger_desc=f"30m内高点({max_price_30m})回调达 {drop_pct * 100:.2f}%"
+                        )
 
                         last_alert_times[symbol] = now_ts
                         save_state()

@@ -48,13 +48,23 @@ def check_short_opportunity(
     klines_15m: List[List[Any]], 
     klines_5m: List[List[Any]], 
     oi_list: List[float],
-    use_15m_mode: bool = True
+    use_15m_mode: bool = True,
+    eval_time_ms: Optional[int] = None
 ) -> Tuple[bool, str]:
     """
     判断做空条件：
     - 做空：阴线的量是不是超过之前的 50%+ ，是的话，且交易量超过对应阈值(15m为10M，5m折算为3.33M) 且主动sell强于主动buy
     - OI 强约束：OI按趋势减少（slope < 0）
     """
+    ref_time = eval_time_ms if eval_time_ms is not None else int(time.time() * 1000)
+    completed_15m = [k for k in klines_15m if int(k[6]) <= ref_time]
+    completed_5m = [k for k in klines_5m if int(k[6]) <= ref_time]
+    if not completed_15m: completed_15m = klines_15m[:1]
+    if not completed_5m: completed_5m = klines_5m[:1]
+    
+    klines_15m = completed_15m
+    klines_5m = completed_5m
+
     target_klines = klines_15m if use_15m_mode else klines_5m
     if len(target_klines) < 12:
         return False, "K线数据不足12根，无法回溯前10根阳线"
@@ -151,7 +161,8 @@ def check_long_opportunity(
     oi_list: List[float],
     use_15m_mode: bool = True,
     trigger_drop_pct: float = 0.20,
-    trigger_ts: Optional[int] = None
+    trigger_ts: Optional[int] = None,
+    eval_time_ms: Optional[int] = None
 ) -> Tuple[bool, str]:
     """
     判断做多条件：
@@ -159,6 +170,15 @@ def check_long_opportunity(
     - 做多：当前或-1的阴线的量没超过之前近30根阳线最大量那条，且5分钟主动买卖数据里面近 5根里面至少有主买大有主卖的
     - OI 强约束：除非是下跌40%级别及以上的暴跌，否则OI减少不禁止开多；若为40%及以上暴跌，则OI不能按趋势减少
     """
+    ref_time = eval_time_ms if eval_time_ms is not None else int(time.time() * 1000)
+    completed_15m = [k for k in klines_15m if int(k[6]) <= ref_time]
+    completed_5m = [k for k in klines_5m if int(k[6]) <= ref_time]
+    if not completed_15m: completed_15m = klines_15m[:1]
+    if not completed_5m: completed_5m = klines_5m[:1]
+    
+    klines_15m = completed_15m
+    klines_5m = completed_5m
+
     # 优先判定筹码未覆盖的抄底逻辑
     if trigger_ts is not None and len(klines_5m) >= 52:
         # 寻找触发时刻的时间戳在 klines_5m 里的索引
@@ -462,8 +482,8 @@ async def run_backtest_for_symbol(
             if val is not None:
                 oi_list.append(val)
                 
-        short_pass, short_reason = check_short_opportunity(symbol, history_15m, history_5m, oi_list, use_15m_mode)
-        long_pass, long_reason = check_long_opportunity(symbol, history_15m, history_5m, oi_list, use_15m_mode, actual_drop_pct, trigger_ts=T_ms)
+        short_pass, short_reason = check_short_opportunity(symbol, history_15m, history_5m, oi_list, use_15m_mode, eval_time_ms=Eval_T_ms)
+        long_pass, long_reason = check_long_opportunity(symbol, history_15m, history_5m, oi_list, use_15m_mode, actual_drop_pct, trigger_ts=T_ms, eval_time_ms=Eval_T_ms)
         
         decision = "NONE"
         reason = ""
@@ -665,10 +685,13 @@ async def monitor_loop(trigger_mode: str = "volume"):
                         trigger_ts = info.get("trigger_ts")
                         actual_drop = info.get("actual_drop_pct", 0.20)
                         
-                        short_pass, short_reason = check_short_opportunity(symbol, klines_15m, klines_5m, oi_list, use_15m_mode=True)
+                        eval_time_ms = int(time.time() * 1000)
+                        short_pass, short_reason = check_short_opportunity(
+                            symbol, klines_15m, klines_5m, oi_list, use_15m_mode=True, eval_time_ms=eval_time_ms
+                        )
                         long_pass, long_reason = check_long_opportunity(
                             symbol, klines_15m, klines_5m, oi_list, use_15m_mode=True, 
-                            trigger_drop_pct=actual_drop, trigger_ts=trigger_ts
+                            trigger_drop_pct=actual_drop, trigger_ts=trigger_ts, eval_time_ms=eval_time_ms
                         )
                         
                         decision = "NONE"

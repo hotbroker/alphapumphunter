@@ -1,3 +1,4 @@
+from multiprocessing import util
 import os
 import sys
 import time
@@ -279,13 +280,13 @@ def check_long_opportunity(
         max_vol_30 = get_max_bullish_volume(len(target_klines) - 1)
         if max_vol_30 > 0 and c1_vol < max_vol_30:
             long_ok = True
-            long_reason = f"最新阴线成交量({c1_vol:.2f})未超过前30阳线最大量({max_vol_30:.2f})"
+            long_reason = f"最新阴线成交量({utils.format_big_number(c1_vol)})未超过前30阳线最大量({utils.format_big_number(max_vol_30)})"
             
     if not long_ok and is_c2_bear:
         max_vol_30 = get_max_bullish_volume(len(target_klines) - 2)
         if max_vol_30 > 0 and c2_vol < max_vol_30:
             long_ok = True
-            long_reason = f"前一根阴线成交量({c2_vol:.2f})未超过前30阳线最大量({max_vol_30:.2f})"
+            long_reason = f"前一根阴线成交量({utils.format_big_number(c2_vol)})未超过前30阳线最大量({utils.format_big_number(max_vol_30)})"
             
     if not long_ok:
         return False, "阴线成交量过大，超过了前30阳线的最大量"
@@ -723,6 +724,7 @@ async def monitor_loop(trigger_mode: str = "volume"):
                         
         except Exception as e:
             logger.exception(f"实时监控主循环异常: {e}")
+            await send_feishu_alert("🚨 瞬间机会评估下单提醒 | 实时监控异常", f"实时监控主循环异常: {e}")
             
         await asyncio.sleep(10)
 

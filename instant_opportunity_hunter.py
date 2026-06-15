@@ -262,34 +262,40 @@ def check_long_opportunity(
     if not is_c1_bear and not is_c2_bear:
         return False, "当前和前一根均非阴线"
         
-    def get_max_bullish_volume(check_idx: int) -> float:
-        bullish_volumes = []
-        idx = check_idx - 1
-        while idx >= 0 and len(bullish_volumes) < 30:
-            k_open, k_close = float(target_klines[idx][1]), float(target_klines[idx][4])
+    def get_max_volume_info(check_idx: int) -> Tuple[float, bool]:
+        """
+        获取 check_idx 之前 30 根 K 线中：
+        最大成交量 (float) 以及 该最大成交量 K 线是否为阳线 (bool)
+        """
+        max_vol = 0.0
+        is_max_bull = False
+        start_idx = max(0, check_idx - 30)
+        for idx in range(start_idx, check_idx):
+            k_open = float(target_klines[idx][1])
+            k_close = float(target_klines[idx][4])
             k_vol = float(target_klines[idx][5])
-            if k_close > k_open: 
-                bullish_volumes.append(k_vol)
-            idx -= 1
-        return max(bullish_volumes) if bullish_volumes else 0.0
+            if k_vol > max_vol:
+                max_vol = k_vol
+                is_max_bull = (k_close > k_open)
+        return max_vol, is_max_bull
 
     long_ok = False
     long_reason = ""
     
     if is_c1_bear:
-        max_vol_30 = get_max_bullish_volume(len(target_klines) - 1)
-        if max_vol_30 > 0 and c1_vol < max_vol_30:
+        max_vol_30, is_max_bull = get_max_volume_info(len(target_klines) - 1)
+        if max_vol_30 > 0 and is_max_bull and c1_vol < max_vol_30:
             long_ok = True
-            long_reason = f"最新阴线成交量({utils.format_big_number(c1_vol)})未超过前30阳线最大量({utils.format_big_number(max_vol_30)})"
+            long_reason = f"最新阴线成交量({utils.format_big_number(c1_vol)})未超过前30K线最大量({utils.format_big_number(max_vol_30)})且最大量为阳线"
             
     if not long_ok and is_c2_bear:
-        max_vol_30 = get_max_bullish_volume(len(target_klines) - 2)
-        if max_vol_30 > 0 and c2_vol < max_vol_30:
+        max_vol_30, is_max_bull = get_max_volume_info(len(target_klines) - 2)
+        if max_vol_30 > 0 and is_max_bull and c2_vol < max_vol_30:
             long_ok = True
-            long_reason = f"前一根阴线成交量({utils.format_big_number(c2_vol)})未超过前30阳线最大量({utils.format_big_number(max_vol_30)})"
+            long_reason = f"前一根阴线成交量({utils.format_big_number(c2_vol)})未超过前30K线最大量({utils.format_big_number(max_vol_30)})且最大量为阳线"
             
     if not long_ok:
-        return False, "阴线成交量过大，超过了前30阳线的最大量"
+        return False, "未满足：前30根K线中最大成交量那根为阳线且当前阴线量未超最大量"
         
     # 2. 检查 5m 主动买卖：近 5 根 5m K 线里面至少有主买大于主卖的
     if len(klines_5m) < 5:

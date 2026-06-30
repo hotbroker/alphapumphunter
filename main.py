@@ -791,6 +791,10 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 continue
 
                             volUSDlist = [float(k[7]) for k in volumndata]
+                            limit_15VOl = 800*10000
+                            if max(volUSDlist[-5:])<limit_15VOl:
+                                print(f'{sym} have no {limit_15VOl} trade vol')
+                                continue
                             vollist = [utils.format_big_number(float(k[7])) for k in volumndata]
     
                             takervol = [float(k[10])/float(k[7]) for k in volumndata]

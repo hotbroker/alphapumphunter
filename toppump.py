@@ -602,7 +602,10 @@ async def cmd_run_simple(
 
                 if notify:
                     energy_level = int(en.get("energy_level", 0))
-                    if energy_level >= 2:
+                    vol_usd_list = en.get("vol_usd_list", [])
+                    vol_last5 = vol_usd_list[-5:]
+                    
+                    if energy_level >= 2 and max(vol_last5)>800*10000:
                         prev = last_alert_ts.get(sym, 0)
                         if now_ts - prev >= cooldown_secs:
                             last_alert_ts[sym] = now_ts

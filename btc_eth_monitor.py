@@ -5,6 +5,10 @@ import asyncio
 import httpx
 import time
 import utils
+from health_reporter import KumaHealthReporter
+
+
+health_reporter = KumaHealthReporter("btc_eth_monitor")
 
 if __name__ == "__main__":
     logger.add("log{}.log".format(os.path.basename(os.path.abspath(__file__))), rotation="1 MB",retention="3 days",level="INFO")  # Rotate logs when they reach 1 MB
@@ -179,14 +183,21 @@ async def check_symbol(symbol):
 async def main():
     logger.info(f"开始监控 {SYMBOLS} 的异常波动")
     logger.info(f"1分钟阈值: {THRESHOLD_1M*100}% | 5分钟阈值: {THRESHOLD_5M*100}% | 检查间隔: {CHECK_INTERVAL}s")
+    health_reporter.report_up(f"monitor started; symbols={len(SYMBOLS)}")
 
     while True:
         try:
+            cycle_started = time.monotonic()
             for symbol in SYMBOLS:
                 await check_symbol(symbol)
                 await asyncio.sleep(0.5)  # 请求间隔，避免频率限制
+            health_reporter.report_up(
+                f"cycle ok; symbols={len(SYMBOLS)}",
+                (time.monotonic() - cycle_started) * 1000,
+            )
         except Exception as e:
             logger.opt(exception=True).error(f"监控循环异常: {e}")
+            health_reporter.report_down(f"monitor loop error: {e}")
 
         await asyncio.sleep(CHECK_INTERVAL)
 

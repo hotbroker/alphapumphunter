@@ -11,6 +11,10 @@ import httpx
 from loguru import logger
 
 import utils
+from health_reporter import KumaHealthReporter
+
+
+health_reporter = KumaHealthReporter("holder_monitor")
 
 # Template Required Header
 if __name__ == "__main__":
@@ -380,6 +384,7 @@ def main():
 
 async def monitor_loop(db: HolderDB, threshold: float):
     logger.info(f"监控主循环已启动，自动入库门槛: {utils.format_big_number(threshold)}")
+    health_reporter.report_up("monitor started; holder database initialized")
     while True:
         try:
             start_ts = time.time()
@@ -394,9 +399,14 @@ async def monitor_loop(db: HolderDB, threshold: float):
             elapsed = time.time() - start_ts
             wait_time = max(60, 600 - elapsed)
             logger.info(f"本轮结束。等待 {wait_time:.1f}s 进行下一轮...")
+            health_reporter.report_up(
+                "cycle ok; holder data refreshed",
+                elapsed * 1000,
+            )
             await asyncio.sleep(wait_time)
         except Exception as e:
             logger.error(f"Loop loop error: {e}")
+            health_reporter.report_down(f"monitor loop error: {e}")
             await asyncio.sleep(60)
 
 if __name__ == "__main__":

@@ -249,9 +249,9 @@ def monitor_step(processed_ids: set, api_key: str, handles: list = None) -> bool
         if analysis.get("has_target") and analysis.get("has_pricing_deviation"):
             logger.info(f"🎯 定价偏差命中！标的={analysis.get('target_name')}。推送飞书...")
             feishu_msg = format_feishu_message(tweet, analysis)
-            utils.send_notification_feishu(FEISHU_WEBHOOK, feishu_msg, "推特定价偏差警报")
+            #utils.send_notification_feishu(FEISHU_WEBHOOK, feishu_msg, "推特定价偏差警报")
             # 推送到另一个群 早期alpha信号
-            utils.send_notification_feishu("https://open.feishu.cn/open-apis/bot/v2/hook/5445d721-c590-4b17-8365-f7baa9b4dd95", feishu_msg, "推特定价偏差警报")
+            #utils.send_notification_feishu("https://open.feishu.cn/open-apis/bot/v2/hook/5445d721-c590-4b17-8365-f7baa9b4dd95", feishu_msg, "推特定价偏差警报")
         else:
             logger.info(f"⚡ 不满足预警条件。标的: {analysis.get('target_name')}, 定价偏差: {analysis.get('has_pricing_deviation')}")
             

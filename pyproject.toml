@@ -11,5 +11,6 @@ dependencies = [
     "httpx[socks]>=0.25",
     "loguru>=0.7",
     "pybit>=5.10",
+    "uptime-kuma-api>=1.2.1",
     "uvicorn>=0.42.0",
 ]

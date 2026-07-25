@@ -56,14 +56,15 @@ async def get_usdt_perpetual_symbols() -> list[str]:
         return []
 
 
-async def get_all_tickers() -> dict[str, dict]:
+async def get_all_tickers(quoteVolume: float=0) -> dict[str, dict]:
     """获取所有合约的 ticker，返回 {symbol: {lastPrice, ...}}"""
     url = 'https://fapi.binance.com/fapi/v1/ticker/24hr'
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.get(url, headers=HEADERS)
             r.raise_for_status()
-            return {item['symbol']: item for item in r.json()}
+            
+            return {item['symbol']: item for item in r.json() if float(item.get('quoteVolume', 0)) > quoteVolume}
     except Exception as e:
         logger.opt(exception=True).warning(f"获取 ticker 失败: {e}")
         return {}
@@ -191,7 +192,7 @@ async def main():
             now = time.time()
 
             # 1. 获取所有 ticker
-            tickers = await get_all_tickers()
+            tickers = await get_all_tickers(quoteVolume=2_0000_0000) #200m
             if not tickers:
                 logger.warning("获取 ticker 失败，跳过本轮")
                 await asyncio.sleep(CHECK_INTERVAL)

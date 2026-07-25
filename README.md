@@ -1,5 +1,7 @@
 # Alpha Pump Hunter
 
+Uptime Kuma 常驻进程监管与异步健康上报说明见 `UPTIME_KUMA.md`。
+
 本项目是一个多维度的加密货币监控与告警系统，核心聚焦于 **Binance Alpha** 潜力币种监控、**持仓异动分析**以及**合约行情能量追踪**。
 
 ---

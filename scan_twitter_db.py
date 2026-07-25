@@ -18,6 +18,10 @@ logger.info(f'start with file {os.path.basename(os.path.abspath(__file__))} pid 
 # 导入项目 utils 模块以复用配置与接口
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
+from health_reporter import KumaHealthReporter
+
+
+health_reporter = KumaHealthReporter("scan_twitter_db")
 
 DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "twitter_history.db")
 
@@ -335,14 +339,21 @@ def run_monitor_loop():
     """主监控循环：每 10 秒运行一次扫描入库"""
     logger.info("启动 10 秒高频推特归档扫描循环...")
     init_db()
+    health_reporter.report_up("monitor started; database initialized")
     
     while True:
         try:
+            cycle_started = time.monotonic()
             new_count = scan_and_archive()
             if new_count > 0:
                 logger.info(f"此次扫描发现并成功归档 {new_count} 条新推文！")
+            health_reporter.report_up(
+                f"scan ok; archived={new_count}",
+                (time.monotonic() - cycle_started) * 1000,
+            )
         except Exception as e:
             logger.error(f"高频扫描主循环异常: {e}")
+            health_reporter.report_down(f"scan loop error: {e}")
             
         time.sleep(10)
 

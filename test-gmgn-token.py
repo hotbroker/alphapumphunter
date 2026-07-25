@@ -53,9 +53,14 @@ def refreshtoken():
         'os': 'web',
         'worker': '0',
     }
+    params.update(utils.Gparams)
+    cookies.update(utils.Gcookies)
+    headers.update(utils.Gheaders)
 
+    #test gmgn的账号，浏览器里面取 tginfo refresh_token  
     json_data = {
-        'refresh_token': "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZGRyZXNzIjoiMnVjckVtRUd2WkhzMzdzampONFBQdFRRYk5pZ2M1b0xOb1p2NmNnUW1uZkQiLCJhdWQiOiJnbWduLmFpL3JlZnJlc2giLCJjaGFpbiI6InNvbCIsImRhdGEiOnsiYWRkcmVzcyI6IjJ1Y3JFbUVHdlpIczM3c2pqTjRQUHRUUWJOaWdjNW9MTm9adjZjZ1FtbmZEIiwiYXBwIjoiZ21nbiIsImNoYWluIjoic29sIiwiY2xpZW50X2lkIjoiZ21nbl93ZWJfMjAyNjA1MjQtMzQ3LTFhNzRlYTciLCJkZXZpY2VfaWQiOiIyNGRhZmE4Yy1hNjk4LTQ1ZGItYTAzOS1mNjk2NTdiYjQ5NGIiLCJmYXRoZXJfaWQiOiIiLCJmaW5nZXJwcmludCI6InYxMTJjYzA1NjZhMjExYjJlOWZiYmM2OTQ3OGU1NmI1OTEiLCJwbGF0Zm9ybSI6IndlYiIsInVzZXJfaWQiOiI5YmNjOWE3YmQtMjgzZTctMjhkMmYtZWY0MjMtMjU1MDZkMTkifSwiZXhwIjoxNzgyMjcxODc1LCJpYXQiOjE3Nzk2Nzk4NzUsImlzcyI6ImdtZ24uYWkvc2lnbmVyIiwianRpIjoiM2I3ZWZjZjUtZGRkMS00YmNlLWE4NDEtOTE2MDk5YWJmN2Q5IiwibmJmIjoxNzc5Njc5ODc1LCJzdWIiOiJnbWduLmFpL3JlZnJlc2giLCJ2ZXIiOiIxLjAiLCJ2ZXJzaW9uIjoiMi4wIn0.4MBfHbUC4b_nDVBD1J6r-ErrVAGbWS7l0v5HJsgn58hAQa5yDmArr00eCMQYWkB4S15v_EgBLXiwuZRWZK7xIQ"
+        #'refresh_token': "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZGRyZXNzIjoiMnVjckVtRUd2WkhzMzdzampONFBQdFRRYk5pZ2M1b0xOb1p2NmNnUW1uZkQiLCJhdWQiOiJnbWduLmFpL3JlZnJlc2giLCJjaGFpbiI6InNvbCIsImRhdGEiOnsiYWRkcmVzcyI6IjJ1Y3JFbUVHdlpIczM3c2pqTjRQUHRUUWJOaWdjNW9MTm9adjZjZ1FtbmZEIiwiYXBwIjoiZ21nbiIsImNoYWluIjoic29sIiwiY2xpZW50X2lkIjoiZ21nbl93ZWJfMjAyNjA1MjQtMzQ3LTFhNzRlYTciLCJkZXZpY2VfaWQiOiIyNGRhZmE4Yy1hNjk4LTQ1ZGItYTAzOS1mNjk2NTdiYjQ5NGIiLCJmYXRoZXJfaWQiOiIiLCJmaW5nZXJwcmludCI6InYxMTJjYzA1NjZhMjExYjJlOWZiYmM2OTQ3OGU1NmI1OTEiLCJwbGF0Zm9ybSI6IndlYiIsInVzZXJfaWQiOiI5YmNjOWE3YmQtMjgzZTctMjhkMmYtZWY0MjMtMjU1MDZkMTkifSwiZXhwIjoxNzgyMjcxODc1LCJpYXQiOjE3Nzk2Nzk4NzUsImlzcyI6ImdtZ24uYWkvc2lnbmVyIiwianRpIjoiM2I3ZWZjZjUtZGRkMS00YmNlLWE4NDEtOTE2MDk5YWJmN2Q5IiwibmJmIjoxNzc5Njc5ODc1LCJzdWIiOiJnbWduLmFpL3JlZnJlc2giLCJ2ZXIiOiIxLjAiLCJ2ZXJzaW9uIjoiMi4wIn0.4MBfHbUC4b_nDVBD1J6r-ErrVAGbWS7l0v5HJsgn58hAQa5yDmArr00eCMQYWkB4S15v_EgBLXiwuZRWZK7xIQ"
+        'refresh_token': "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJnbWduLmFpL3JlZnJlc2giLCJkYXRhIjp7InVzZXJfaWQiOiIwNGQwN2JkYy0zNDQwLTQ3ZGUtYjRhOS0yOGZhMWMyNDIyZGMiLCJjbGllbnRfaWQiOiJnbWduX3dlYl8yMDI2MDYyNS0xMzU2LTM2MDkzZWEiLCJkZXZpY2VfaWQiOiIyNGRhZmE4Yy1hNjk4LTQ1ZGItYTAzOS1mNjk2NTdiYjQ5NGIiLCJmYXRoZXJfaWQiOiIiLCJmaW5nZXJwcmludCI6InYxMTJjYzA1NjZhMjExYjJlOWZiYmM2OTQ3OGU1NmI1OTEiLCJhcHAiOiJnbWduIiwicGxhdGZvcm0iOiJ3ZWIifSwiZXhwIjoxNzg0OTg1OTAwLCJpYXQiOjE3ODIzOTM5MDAsImlzcyI6ImdtZ24uYWkvc2lnbmVyIiwianRpIjoiMzljNTEwMWItMzEzNy00ODM1LTkwNTEtYWNkMmI2MGVlNzkzIiwibmJmIjoxNzgyMzkzOTAwLCJzdWIiOiJnbWduLmFpL3JlZnJlc2giLCJ1c2VyX2lkIjoiMDRkMDdiZGMtMzQ0MC00N2RlLWI0YTktMjhmYTFjMjQyMmRjIiwidmVyIjoiMS4wIn0.B-c-4NZ-XmtwxvzoEDyG5NMGzkSQEIuUwD3S5HM-xNHkVYxm_ndA_-X9eYJmV2kyIjW-1Hh_Wj7Zpnt8wiDUcA"
     }
     url='https://gmgn.ai/account/account/refresh_access_token'
     if utils.is_windows:
@@ -116,7 +121,7 @@ while 1:
                 success = True
                 break
             if i < 2:
-                time.sleep(5)
+                time.sleep(10)
         if not success:
             print('cookie is not ok')
             utils.send_notification_feishu(utils.feishu_myself,f'test gmgn error:{checkgmgn.text[:100]}', 'test_gmgn_cookie_ok')

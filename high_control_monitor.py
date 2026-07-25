@@ -15,6 +15,10 @@ from datetime import datetime, timedelta
 import httpx
 from loguru import logger
 import utils
+from health_reporter import KumaHealthReporter
+
+
+health_reporter = KumaHealthReporter("high_control_monitor")
 
 if __name__ == "__main__":
     logger.add("log{}.log".format(os.path.basename(os.path.abspath(__file__))), rotation="1 MB", retention="3 days", level="INFO")
@@ -192,12 +196,15 @@ async def check_token(sym, token_info, alert_history):
 async def run_monitor():
     """主监控循环"""
     logger.info(f"高控盘横盘监控启动，检查间隔 {CHECK_INTERVAL}s，K线数量 {KLINE_COUNT}，阈值 {MAX_AVG_CHANGE_PCT}%")
+    health_reporter.report_up("monitor started")
 
     while True:
         try:
+            cycle_started = time.monotonic()
             tokens = load_high_control_tokens()
             if not tokens:
                 logger.info("缓存文件为空或不存在，等待 main.py 写入高控盘币种...")
+                health_reporter.report_up("cycle ok; tracked tokens=0")
                 await asyncio.sleep(CHECK_INTERVAL)
                 continue
 
@@ -218,9 +225,14 @@ async def run_monitor():
             save_alert_history(alert_history)
             if alert_count > 0:
                 logger.info(f"本轮检查完毕，触发 {alert_count} 个告警")
+            health_reporter.report_up(
+                f"cycle ok; tracked={len(tokens)}; alerts={alert_count}",
+                (time.monotonic() - cycle_started) * 1000,
+            )
 
         except Exception as e:
             logger.opt(exception=True).error(f"监控循环出错: {e}")
+            health_reporter.report_down(f"monitor loop error: {e}")
 
         await asyncio.sleep(CHECK_INTERVAL)
 

@@ -8,6 +8,10 @@ from typing import Dict, Any, List, Optional
 import httpx
 from loguru import logger
 import utils
+from health_reporter import KumaHealthReporter
+
+
+health_reporter = KumaHealthReporter("binance_monitor_drops")
 '''
 增加一个新的脚本，监控 12月15号后新上的合约的币，
 如果从最高价跌到当前 超过40%和50%的话，
@@ -143,10 +147,12 @@ async def send_notification_async(
 async def monitor_loop():
     logger.info(f"Starting generic new listing monitor. Target Date: {TARGET_DATE} ({TARGET_TS_MS})")
     load_state()
+    health_reporter.report_up(f"monitor started; tracked={len(market_state)}")
     
     async with httpx.AsyncClient(timeout=20) as client:
         while True:
             try:
+                cycle_started = time.monotonic()
                 # 1. Identify New Listings
                 symbols = await fetch_exchange_info(client)
                 
@@ -235,9 +241,15 @@ async def monitor_loop():
                         
                 if keys_to_save:
                     save_state()
+
+                health_reporter.report_up(
+                    f"cycle ok; new listings={len(new_symbols)}; tracked={len(market_state)}",
+                    (time.monotonic() - cycle_started) * 1000,
+                )
                     
             except Exception as e:
                 logger.exception(f"Error in monitor loop: {e}")
+                health_reporter.report_down(f"monitor loop error: {e}")
                 
             # Wait 60s
             await asyncio.sleep(60)

@@ -9,6 +9,10 @@ from pydantic import BaseModel
 import uvicorn
 from loguru import logger
 from datetime import datetime
+from health_reporter import KumaHealthReporter
+
+
+health_reporter = KumaHealthReporter("holder_server")
 
 # Required Header
 if __name__ == "__main__":
@@ -17,6 +21,11 @@ if __name__ == "__main__":
 logger.info(f"Starting holder_server.py pid {os.getpid()}")
 
 app = FastAPI(title="大哥的持仓监控 API")
+
+
+@app.on_event("startup")
+async def start_health_reporting():
+    health_reporter.start_periodic(60, "FastAPI holder service running on port 7009")
 
 # Enable CORS for frontend
 app.add_middleware(

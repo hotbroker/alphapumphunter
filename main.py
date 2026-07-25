@@ -18,6 +18,10 @@ import os
 from datetime import datetime, timedelta
 from bybit_async import place_contract_order, get_position_profit
 import toppump
+from health_reporter import KumaHealthReporter
+
+
+health_reporter = KumaHealthReporter("main")
 
 if __name__ == "__main__":
     logger.add("log{}.log".format(os.path.basename(os.path.abspath(__file__))), rotation="1 MB",retention="7 days",level="INFO")  # Rotate logs when they reach 1 MB
@@ -657,6 +661,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
         time.sleep(2)
         report_pnl_time=0
+        health_reporter.report_up(f"monitor initialization complete; tracked={len(tracked_ids)}")
         while True:
             num = len(list(tracked_ids))
             roundcnt = roundcnt+1
@@ -1006,6 +1011,10 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         if is_high_control:
                             title="高控盘-"+title
                         await send_notification_async(alpha_hunter_group, msg, title=title)
+                health_reporter.report_up(
+                    f"cycle ok; tracked={len(tracked_ids)}; round={roundcnt}",
+                    (time.time() - tick_start) * 1000,
+                )
                 # pacing
                 elapsed = time.time() - tick_start
                 sleep_for = max(0.0, interval - elapsed)
@@ -1017,6 +1026,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
             except Exception as e:
                 stackmsg = traceback.format_exc()
                 logger.opt(exception=True).error(f"Monitor loop error: {e}")
+                health_reporter.report_down(f"monitor loop error: {e}")
                 await send_notification_async('veryverybad', f"Monitor loop error: {e}\n{stackmsg}", title="Alpha PumpHunter Error\n")
                 await asyncio.sleep(max(5.0, interval / 2))
 

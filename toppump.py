@@ -12,6 +12,10 @@ import os
 from datetime import datetime, timedelta
 import utils
 import traceback
+from health_reporter import KumaHealthReporter
+
+
+health_reporter = KumaHealthReporter("toppump")
 
 if __name__ == "__main__":
     logger.add("log{}.log".format(os.path.basename(os.path.abspath(__file__))), rotation="1 MB",retention="3 days",level="INFO")  # Rotate logs when they reach 1 MB
@@ -560,6 +564,7 @@ async def cmd_run_simple(
         logger.info(f"Token {t} is alpha: {isalpha}")
 
     time.sleep(2)
+    health_reporter.report_up("monitor initialization complete")
     while True:
         loop = asyncio.get_running_loop()
         start = loop.time()
@@ -693,9 +698,15 @@ async def cmd_run_simple(
             except Exception as e:
                 logger.warning(f"failed to save push history: {e}")
 
+            health_reporter.report_up(
+                f"cycle ok; candidates={len(filtered)}",
+                (loop.time() - start) * 1000,
+            )
+
         except Exception as e:
             stackmsg = traceback.format_exc()
             logger.opt(exception=True).warning(f"run loop error: {e}")
+            health_reporter.report_down(f"run loop error: {e}")
             await send_notification_async('veryverybad', f"run loop error:\n{stackmsg}", title="TopPump Error\n")
         elapsed = loop.time() - start
         wait = max(0.0, interval - elapsed)

@@ -7,6 +7,10 @@ import json
 import os
 from datetime import datetime, timedelta
 from loguru import logger
+from health_reporter import KumaHealthReporter
+
+
+health_reporter = KumaHealthReporter("binance_monitor")
 
 if __name__ == "__main__":
     logger.add("log{}.log".format(os.path.basename(os.path.abspath(__file__))), rotation="1 MB",retention="3 days",level="INFO")  # Rotate logs when they reach 1 MB
@@ -305,8 +309,10 @@ def main():
     exclude_symbols = ['BTCUSDT',"ETHUSDT","BCHUSDT","BNBUSDT","XRPUSDT","TRXUSDT"]
     stocksymbols =['XAUUSDT','XAGUSDT','TSLAUSDT','XPTUSDT','XPDUSDT','INTCUSDT','HOODUSDT','MSTRUSDT','AMZNUSDT','CRCLUSDT' ,'COINUSDT'  ,'PLTRUSDT' ]
     symbols = exclude_symbols + stocksymbols
+    health_reporter.report_up("monitor started")
     while True:
         try:    
+            cycle_started = time.monotonic()
             logger.info("Starting new scan cycle...")
             tickers = get_top_volume_tickers()
             tickers = [s for s in tickers if s not in symbols]
@@ -321,9 +327,14 @@ def main():
                 analyze_symbol(symbol, 1000*10000)
         
             logger.info("Scan complete. Waiting 5 minutes...")
+            health_reporter.report_up(
+                f"scan ok; tickers={len(tickers)}",
+                (time.monotonic() - cycle_started) * 1000,
+            )
             time.sleep(300)
         except Exception as e:
             logger.opt(exception=True).error("Error in main loop")
+            health_reporter.report_down(f"main loop error: {e}")
             time.sleep(300)
 
 if __name__ == "__main__":

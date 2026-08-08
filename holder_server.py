@@ -38,10 +38,12 @@ app.add_middleware(
 # 挂载静态文件以访问 logo.png 等
 app.mount("/static", StaticFiles(directory="."), name="static")
 
-DB_NAME = "holder_stats.db"
+DB_NAME = os.path.join(os.path.dirname(os.path.abspath(__file__)), "holder_stats.db")
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_NAME)
+    # Keep reads from waiting indefinitely when the monitor is committing a row.
+    conn = sqlite3.connect(DB_NAME, timeout=10)
+    conn.execute("PRAGMA busy_timeout = 10000")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -53,19 +55,31 @@ async def read_root():
     return "<h1>Holder Monitor Server Ready</h1><p>index.html not found</p>"
 
 @app.get("/api/tokens")
-async def get_tokens():
+def get_tokens():
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            # 获取监控列表及其最新的一条记录以展示概览
+            # 获取全部监控币种，并通过现有 (symbol, timestamp) 索引
+            # 为每个币种直接取最新一条记录，避免对整个 holder_records
+            # 做 ROW_NUMBER() 窗口排序。
             cursor.execute('''
-                SELECT m.*, r.top10_percent, r.top100_percent, r.bnalpha_percent, r.cex_percent, r.vol_24h, r.oi_usd, r.timestamp as last_update
-                FROM monitored_tokens m
-                LEFT JOIN (
-                    SELECT symbol, top10_percent, top100_percent, bnalpha_percent, cex_percent, vol_24h, oi_usd, timestamp,
-                           ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) as rn
-                    FROM holder_records
-                ) r ON m.symbol = r.symbol AND r.rn = 1
+                SELECT m.*,
+                       r.top10_percent,
+                       r.top100_percent,
+                       r.bnalpha_percent,
+                       r.cex_percent,
+                       r.vol_24h,
+                       r.oi_usd,
+                       r.timestamp AS last_update
+                FROM monitored_tokens AS m
+                LEFT JOIN holder_records AS r
+                  ON r.id = (
+                      SELECT r2.id
+                      FROM holder_records AS r2
+                      WHERE r2.symbol = m.symbol
+                      ORDER BY r2.timestamp DESC, r2.id DESC
+                      LIMIT 1
+                  )
             ''')
             return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
@@ -73,7 +87,7 @@ async def get_tokens():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/history/{symbol}")
-async def get_history(symbol: str, hours: int = 48):
+def get_history(symbol: str, hours: int = 48):
     try:
         cutoff = datetime.now().timestamp() - (hours * 3600)
         with get_db_connection() as conn:
@@ -90,7 +104,7 @@ async def get_history(symbol: str, hours: int = 48):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/index_history/{symbol}")
-async def get_index_history(symbol: str):
+def get_index_history(symbol: str):
     """获取价格指数历史，间隔约7天一个点，优化查询性能"""
     try:
         symbol_upper = symbol.upper()

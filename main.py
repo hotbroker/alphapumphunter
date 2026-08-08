@@ -32,7 +32,7 @@ logger.info(f'start with file {os.path.basename(os.path.abspath(__file__))} pid 
 alpha_hunter_group='53806935982@chatroom'
 MARKETWEBB_AGGREGATE = "https://www.binance.com/bapi/defi/v1/public/alpha-trade/aggTicker24"
 MARKETWEBB_FAPI_OI = "https://www.binance.com/fapi/v1/openInterest"#好像后来取消了 2025-11-20
-MARKETWEBB_FAPI_OI = "https://www.binance.com/fapi/v1/openInterest" 
+MARKETWEBB_FAPI_OI = "https://www.binance.com/fapi/v1/openInterest"
 MARKETWEBB_SPOT_AGGTRADES = "https://www.binance.com/api/v3/aggTrades"
 
 # Hardcoded MarketWebb headers (as provided by user)
@@ -52,7 +52,7 @@ vibeLevelPos={
     2:100,
     3:200
 }
-    
+
 
 
 api_key, api_secret = utils.load_keys()
@@ -163,7 +163,7 @@ class FapiChecker:
                 if isinstance(js, dict) and ("openInterest" in js or "symbol" in js):
                     self._cache[symbol] = True
                     return True
-        
+
                 return False
             except Exception:
                 self._cache[symbol] = False
@@ -211,7 +211,7 @@ class SpotChecker:
 
     async def has_spot(self, symbol: str) -> bool:
         if self._cache.get(symbol) is True:
- 
+
             return True
 
         async with self._sem:
@@ -324,7 +324,7 @@ def get_bypass_token():
         return []
     with open('bypass_token.txt','r') as f:
         return f.readlines()
-    
+
 def load_history():
     if not os.path.exists('history.json'):
         return {}
@@ -483,9 +483,9 @@ def save_highest_record(history_ranked,item):
             if newprice > oldprice:
                 symitem['highest'] = item
     return history_ranked
-    
 
-    
+
+
 async def test(ca,chainid,fdv=100*1000*1000):
         results = await utils.get_holders_info(ca,chainid)
         msg = ""
@@ -505,8 +505,8 @@ async def test(ca,chainid,fdv=100*1000*1000):
                 cex_percent = sum(cexdata.values())
                 adjusted_top10_percent = 1-top10_holder_percent/100 + cex_percent
                 normalholoder = adjusted_top10_percent*fdv
-                msg += f'减去前10大户后:{utils.format_big_number(normalholoder)})\n'    
-                cexholder = cex_percent*fdv    
+                msg += f'减去前10大户后:{utils.format_big_number(normalholoder)})\n'
+                cexholder = cex_percent*fdv
                 cex_percent =cexholder/normalholoder*100
                 msg += f'其中交易所持有:{utils.format_big_number(cexholder)}，占比{cex_percent:.2f}%\n'
         print(msg)
@@ -565,7 +565,7 @@ async def place_future_order(sym,vibelevel):
         sym = sym+"USDT"
     # Place order
     place_res = None
-    
+
     try:
         place_res = await place_contract_order(
             symbol=sym.upper(),
@@ -580,7 +580,7 @@ async def place_future_order(sym,vibelevel):
         retCode = place_res.get('place_res',{}).get('retCode')
         if retCode==0:
             return place_res
-        
+
     except Exception as e:
         logger.opt(exception=True).warning(f"Place order failed: {e}")
 
@@ -596,7 +596,7 @@ async def place_future_order_no_dup(sym,vibelevel):
                 msg=f'检测到已有持仓，无法重复下单，当前持仓币种{holdingsym}，未实现盈亏 {v:.2f} USD\n\n'
                 logger.info(msg)
                 #await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
-                return 
+                return
     return await place_future_order(sym,vibelevel)
 
 async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, refresh_minutes: int, log_level: str, cooldown_minutes: int):
@@ -636,14 +636,14 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
             testKline =testKline [-5:]
             vollist = [utils.format_big_number(float(k[7])) for k in testKline]
             print(f'last 15m vol vollist {vollist}')
-        
+
         # newurl = f'https://gmgn.ai/vas/api/v1/token_holders/bsc/0xc9ccbd76c2353e593cc975f13295e8289d04d3bb?limit=100&cost=20&orderby=amount_percentage&direction=desc'
         # testresult = await utils.get_holders_cex(newurl)
         # print(f'test holders info from fallback url: {testresult}')
-        
+
         roundcnt=0
         orderlist = load_order_list()
-        
+
         # await place_future_order("AR",1)
         # profit,detail = await get_position_profit(api_key,api_secret, testnet=False)
         # pnldetail = {item['symbol']:item['unrealisedPnl'] for item in detail}
@@ -692,7 +692,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
                 # Fetch current snapshot
                 snapshot = await mw.alpha_items()
-                
+
                 now = time.time()
                 if now - last_report_rank > 3600*4:
                     last_report_rank = now
@@ -703,7 +703,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
                 snap_by_id: Dict[str, dict] = {mw_token_key(it): it for it in snapshot}
 
-                
+
 
                 for idx,token_id in enumerate(list(tracked_ids)):
 
@@ -721,7 +721,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                     if px is None or px <= 0:
                         continue
                     sym = it.get('symbol',0)
-                    
+
                     if not sym:
                         logger.warning(f'fail to get symbol for token_id {token_id}')
                         await asyncio.sleep(5)
@@ -777,7 +777,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 "fdv": "441684238.0700626",
                                 "liquidity": "1832226.14027409274462",
                         '''
-                        
+
                         volumndata = await utils.get_continuousKlines(sym)
                         vollist=None
                         goodvibe=''
@@ -801,7 +801,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 print(f'{sym} have no {limit_15VOl} trade vol')
                                 continue
                             vollist = [utils.format_big_number(float(k[7])) for k in volumndata]
-    
+
                             takervol = [float(k[10])/float(k[7]) for k in volumndata]
                             takervol = [int(x*100)/100 for x in takervol]
                             print(f'{sym} last 15m vol vollist {vollist}')
@@ -816,7 +816,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 average = first5[0]
 
                             good1 = lastMax>800*10000 and lastMax/average>8
-                            
+
                             if good1:
                                 goodvibe="能量不错"
                                 goodvibeLevel=2
@@ -833,7 +833,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 goodvibe="能量很差，可能误报"
                                 logger.warning(f'sym:{sym} 能量很差，可能误报 {volUSDlist}')
                                 continue
-                        
+
 
                         if history_ranked.get(sym) is None or abs(history_ranked.get(sym).get('alerttime')-time.time())>6*24*3600:
                             newit = dict(it) #没报过，或者报警时间超过6天
@@ -864,7 +864,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             msg += f'最新15分钟交易量列表:\n{vollist[-5:]}\n'
                             if goodvibe:
                                 msg += f'\n{goodvibe}\n\n'
-                            
+
                             if takervol:
                                 msg += f'买入情绪列表:\n{takervol}\n'
                                 last3 = takervol[-4:-1]
@@ -872,8 +872,8 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 if max(last3)<0.49 or len(last3Min045)>1:
                                     msg += f'买入情绪较差,谨慎买入\n'
                                 msg += '\n'
-                                    
-                            
+
+
                         msg += f'10分钟涨幅:{change:.2f}%\n'
                         rows = await fetch_binance_futures_24h()
                         futureQV=0
@@ -881,7 +881,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             if row.get("symbol") == sym+"USDT":
                                 futureQV = float(row.get("quoteVolume",0))
                                 break
-                        
+
                         msg += f'24小时合约成交量:{utils.format_big_number(futureQV)}\n'
                         msg += f'24小时涨幅:{str(it.get("percentChange24h", "-"))}%\n'
                         msg += f'24小时成交量:{utils.format_big_number(it.get("volume24h", "-"))}\n'
@@ -891,14 +891,14 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         msg += f'时间:{utils.time_to_string(now)}\n'
                         #msg += f'来源:Alpha PumpHunter'
                         is_high_control = False
-                        
+
                         results_task = utils.get_holders_info(it.get("contractAddress",""),it.get("chainName",""))
                         index_constituents_task = utils.get_index_constituents(sym)
                         results, index_constituents = await asyncio.gather(results_task, index_constituents_task)
-                        
+
                         if index_constituents:
                             msg += f"{index_constituents}\n"
-                        
+
                         if results:
                             fdv = float(it.get("fdv", 0))
                             top100_holder_percent = results.get('top100_holder_percent',0)
@@ -988,7 +988,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             realTimeFundingRate = float(realtime_fundingdata.get('lastFundingRate',0.0))*100
 
 
-                        logger.info(f"最近 sym:{sym} funding rate历史：error msg {fundinghist.get('message','无数据')}") 
+                        logger.info(f"最近 sym:{sym} funding rate历史：error msg {fundinghist.get('message','无数据')}")
                         fundingdata = fundinghist.get('data',[])
                         if fundingdata:
                             msg=msg+f'\n最近三次资金费率记录:\n'
@@ -1005,12 +1005,29 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         print(msg)
                         title=f"Alpha起飞告警 {sym}\n"
                         #emoji fire
-             
+
                         if utils.is_goodpump(volUSDlist, takervol)  and futureQV and futureQV>3000*10000:
                             title=f"Alpha起飞告警 🔥🔥🔥 推荐：{sym}\n"
                         if is_high_control:
                             title="高控盘-"+title
                         await send_notification_async(alpha_hunter_group, msg, title=title)
+
+                        vol_last5 = volUSDlist[-5:]
+                        issuper=False
+                        if max(vol_last5)/min(vol_last5)>50:
+                            issuper = True
+                        for i,vol in enumerate(vol_last5):
+                            if issuper:
+                                break
+                            if vol>10000000 and i>1 and vol_last5[i-1]<500000:
+                                issuper=True
+                                break
+                        if issuper:
+                            await send_notification_async(utils.feishu_alpha_superbuy, msg, title=title)
+
+
+
+
                 health_reporter.report_up(
                     f"cycle ok; tracked={len(tracked_ids)}; round={roundcnt}",
                     (time.time() - tick_start) * 1000,

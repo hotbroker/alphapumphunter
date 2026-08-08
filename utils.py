@@ -14,6 +14,7 @@ feishu_myself = 'https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb
 feishu_alpha = 'https://open.feishu.cn/open-apis/bot/v2/hook/0e014c3c-3891-4b65-b869-9a5aae2b1828'
 #上架alpha通知研究
 feishu_alpha_new_list = 'https://open.feishu.cn/open-apis/bot/v2/hook/d4011103-2a39-473b-befe-1ebc0c57c12f'
+feishu_alpha_superbuy = 'https://open.feishu.cn/open-apis/bot/v2/hook/a80fd68e-1f35-4716-b625-8ca0e9487e35'
 
 import platform
 is_windows = platform.system().lower() == "windows"
@@ -125,24 +126,24 @@ async def get_holders_cex(url) -> dict:
             js = r.json()
             holder_list = js.get("data", {}).get("list", [])
             logger.info(f'number of holders retrieved: {len(holder_list)}')
-            
+
             # Sort holders by amount_percentage in descending order
             sorted_holders = sorted(holder_list, key=lambda x: float(x.get("amount_percentage", 0)), reverse=True)
             #holder has name
             results = {}
             results = {h.get('name'):float(h.get("amount_percentage", 0)) for h in sorted_holders if h.get("name")}
-            
+
             resultsskiptwitter_username = {}
             resultsskiptwitter_username = {h.get('name'):float(h.get("amount_percentage", 0)) for h in sorted_holders if (h.get("name") and not h.get("twitter_username"))}
             logger.info(f'number of holders with name: {results} url: {url}')
             logger.info(f'number of holders without twitter_username: {resultsskiptwitter_username} url: {url}')
-            
+
             return results
-            
+
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get holders info from {url}: {e}")
         return None
-    
+
 
 async def get_continuousKlines(symbol, interval='15m',limit=1000,contractType='PERPETUAL'):
     '''[
@@ -152,7 +153,7 @@ async def get_continuousKlines(symbol, interval='15m',limit=1000,contractType='P
     "18900.00",       	 	// High
     "18878.98",       	 	// Low
     "18896.13",      	 	// Close (or latest price)
-    "492.363", 			 	// Volume #币个数 
+    "492.363", 			 	// Volume #币个数
     1607444759999,       	// Close time
     "9302145.66080",    	// Quote asset volume #usdt计价
     1874,             		// Number of trades
@@ -175,19 +176,19 @@ async def get_continuousKlines(symbol, interval='15m',limit=1000,contractType='P
     'Accept': 'application/json',
     'Connection': 'keep-alive',
 }
-    
+
     try:
 
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, headers=headers)
             r.raise_for_status()
             js = r.json()
- 
+
             return js
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get_continuousKlines {symbol}: {e}")
         return None
-            
+
 
 def get_status(fname):
     if os.path.exists(fname):
@@ -195,7 +196,7 @@ def get_status(fname):
             last_push_notify = f.read()
             if len(last_push_notify)>0:
                 return eval(last_push_notify)
-            
+
     return None
 
 def save_status(fname,last_push_notify):
@@ -236,7 +237,7 @@ MARKETWEBB_HEADERS = {
 
 async def get_alpha_tokens():
     '''Get all alpha tokens from MarketWebb'''
-    
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(MARKETWEBB_AGGREGATE, headers=MARKETWEBB_HEADERS)
@@ -248,13 +249,13 @@ async def get_alpha_tokens():
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get alpha tokens from MarketWebb: {e}")
         return None
-    
-    
+
+
 
 async def get_funding_rate_history(symbol):
-    
+
     symbol = symbol.upper()
-    
+
     url = f'https://www.binance.com/bapi/futures/v1/public/future/common/get-funding-rate-history'
     headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -274,13 +275,13 @@ async def get_funding_rate_history(symbol):
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get_funding_rate_history {symbol}: {e}")
         return None
-            
+
 
 async def get_realtime_funding_rate(symbol):
-    
+
     symbol = symbol.upper()
-    
-    
+
+
     headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'Accept': 'application/json',
@@ -298,7 +299,7 @@ async def get_realtime_funding_rate(symbol):
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get_realtime_funding_rate {symbol}: {e}")
         return None
-            
+
 
 async def send_notification_feishu_async(
     touser: str,
@@ -308,7 +309,7 @@ async def send_notification_feishu_async(
     timeout_sec: float = 10.0,
 ) -> None:
 
-    return 
+    return
 
 
 
@@ -405,8 +406,8 @@ def send_notification_feishu(
     title: str = "Alert",
 ) -> None:
     feishudata = {
-  "msg_type": "text",   
-  "content": {  
+  "msg_type": "text",
+  "content": {
   "text": f"{title}\n{content}"
   }
     }
@@ -484,7 +485,7 @@ def test_gmgn_cookie_ok(headersparams, cookiesparams):
         'sid': 'gmgn%7Cdc2e37e44604e7ddab47f5598a247689',
         '_ga_UGLVBMV4Z0': 'GS1.2.1779676784453227.66453a11d073c232b87f1a738beef8e2.R4PgM5O7GTmZVAb91bp3iw%3D%3D.zolpREO8PeyXsWLqpKZWog%3D%3D.7hzi0vRwf2sKjxMjVPJIEA%3D%3D.5yAJ4aZehkUTatpj7wcYcA%3D%3D',
         '__cf_bm': '3t4rl6LkqQwWuluPORXLkG94Qe_x9d2wF6VxBbYpbOU-1779676924.691349-1.0.1.1-A9LxJws.SiacNV1MZtr_RhjcIdi0K6wj5KxW_7WkmEtzbgKx3MSHwf27quj9RBggj.ZcmhA.0coqyjZWO2oSLDCFq4SHYU1HLfzf.UP4E1.mRrc1H8Vd.UeYtcMPX8lL',
-        '_ga_0XM0LYXGC8': 'GS2.1.s1779676776$o1$g1$t1779676926$j58$l0$h0',        
+        '_ga_0XM0LYXGC8': 'GS2.1.s1779676776$o1$g1$t1779676926$j58$l0$h0',
     }
 
     headers = {
@@ -525,7 +526,7 @@ def test_gmgn_cookie_ok(headersparams, cookiesparams):
         'sec-fetch-mode': 'cors',
         'sec-fetch-site': 'same-origin',
         'sentry-trace': 'e1db64fc3286422b80e5c550efcc9456-9f6ff2a022eb2b9c-0',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',        
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
     }
 
     params = {
@@ -553,7 +554,7 @@ def test_gmgn_cookie_ok(headersparams, cookiesparams):
         'tz_offset': '28800',
         'app_lang': 'zh-CN',
         'os': 'web',
-        'worker': '0',        
+        'worker': '0',
     }
     params.update(Gparams)
     cookies.update(Gcookies)
@@ -657,7 +658,7 @@ def get_twitter_from_GMGN():
         gmgn_authorization = f'Bearer {gmgn_Bearer}'
         if gmgn_Bearer.startswith('Bearer'):
             gmgn_authorization = gmgn_Bearer
-        headers['authorization'] = gmgn_authorization    
+        headers['authorization'] = gmgn_authorization
     url='https://gmgn.ai/vas/api/v1/twitter/messages'
     if is_windows:
         url = url.replace('https://gmgn.ai', 'http://43.163.209.171:8812')
@@ -670,31 +671,31 @@ async def get_index_constituents(symbol: str) -> str:
     """获取币安合约指数构成，返回前3大成分的格式化字符串"""
     if not symbol:
         return ""
-    
+
     symbol_upper = symbol.upper()
     if not symbol_upper.endswith("USDT"):
         symbol_upper = f"{symbol_upper}USDT"
-        
+
     url = f"https://www.binance.com/fapi/v1/constituents?symbol={symbol_upper}"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json',
     }
-    
+
     try:
         async with httpx.AsyncClient(timeout=5) as client:
             r = await client.get(url, headers=headers)
             if r.status_code != 200:
                 return ""
-            
+
             data = r.json()
             constituents = data.get("constituents", [])
             if not constituents:
                 return ""
-            
+
             # 按权重降序排序
             sorted_constituents = sorted(constituents, key=lambda x: float(x.get("weight", 0)), reverse=True)
-            
+
             # 取前3个
             top_3 = sorted_constituents
             #top_3 = sorted_constituents[:3]
@@ -703,9 +704,9 @@ async def get_index_constituents(symbol: str) -> str:
                 exchange = c.get("exchange", "Unknown").capitalize()
                 weight = float(c.get("weight", 0)) * 100
                 parts.append(f"{exchange}({weight:.1f}%)")
-            
+
             return "指数成份: " + ", ".join(parts)
-            
+
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get index constituents for {symbol_upper}: {e}")
         return ""
@@ -728,28 +729,28 @@ async def get_holders_info2(url,datalist=['top100_holder_percent','top10_holder_
             js = r.json()
             holder_list = js.get("data", {}).get("list", [])
             logger.info(f'number of holders retrieved: {len(holder_list)}')
-            
+
             # Sort holders by amount_percentage in descending order
             sorted_holders = sorted(holder_list, key=lambda x: float(x.get("amount_percentage", 0)), reverse=True)
-            
+
             results = {}
             if "top100_holder_percent" in datalist and len(sorted_holders) > 0:
                 top100 = sorted_holders[:100]
                 print(f'length of top100 holders: {len(top100)},first item: {top100[0]["amount_percentage"]}')
                 top100_percent = sum(float(h.get("amount_percentage", 0)) for h in top100)
-                results["top100_holder_percent"] = top100_percent 
+                results["top100_holder_percent"] = top100_percent
                 for h in top100:
                     if h.get("address", "").lower() == bnalphaDeposit:
                         results['bnalpha_holdings'] = float(h.get("amount_percentage", 0))
 
-                
+
             if "top10_holder_percent" in datalist and len(sorted_holders) > 0:
                 top10 = sorted_holders[:10]
                 top10_percent = sum(float(h.get("amount_percentage", 0)) for h in top10)
-                results["top10_holder_percent"] = top10_percent 
-                
+                results["top10_holder_percent"] = top10_percent
+
             return results
-            
+
     except Exception as e:
         logger.opt(exception=True).warning(f"Failed to get holders info from {url}: {e}")
         return None
@@ -857,7 +858,7 @@ async def get_all_binance_coins(api_key: str, api_secret: str) -> List[dict]:
     signature = _sign(query_string, api_secret)
     url = f'https://api.binance.com/sapi/v1/capital/config/getall?{query_string}&signature={signature}'
     headers = {'X-MBX-APIKEY': api_key, 'User-Agent': 'Mozilla/5.0'}
-    
+
     async with httpx.AsyncClient(timeout=5) as client:
         r = await client.get(url, headers=headers)
         if r.status_code != 200:
@@ -908,25 +909,25 @@ def retry_on_429(max_retries=3, delay=2):
         return wrapper
     return decorator
 
-@retry_on_429(max_retries=3, delay=2)    
+@retry_on_429(max_retries=3, delay=2)
 async def get_ca_from_dexscreener(symbol: str) -> Dict[str, str]:
     """使用 DexScreener 搜索合约地址"""
     sym = symbol.upper().replace('USDT', '')
     url = f'https://api.dexscreener.com/latest/dex/search?q={sym}'
-    
+
     allowed_chains = ['ethereum', 'bsc', 'solana', 'base']
-    
+
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.get(url)
             r.raise_for_status()
             data = r.json()
             pairs = data.get('pairs', [])
-            
+
             results = {}
             # 按流动性排序，优先找匹配 symbol 的高流动性池子
             sorted_pairs = sorted(pairs, key=lambda x: float(x.get('liquidity', {}).get('usd', 0)), reverse=True)
-            
+
             for pair in sorted_pairs:
                 if pair.get('baseToken', {}).get('symbol', '').upper() == sym:
                     chain_id = pair.get('chainId', '').lower()
@@ -939,7 +940,7 @@ async def get_ca_from_dexscreener(symbol: str) -> Dict[str, str]:
                     }
                     if chain_id in chain_map and chain_map[chain_id] not in results:
                         results[chain_map[chain_id]] = pair['baseToken']['address']
-            
+
             return results
     except Exception as e:
         logger.warning(f"DexScreener search failed for {sym}: {e}")
@@ -953,7 +954,7 @@ async def get_all_futures_symbols() -> List[str]:
         r = await client.get(url, headers=headers)
         r.raise_for_status()
         data = r.json()
-    
+
     symbols = []
     for s in data.get('symbols', []):
         if s.get('quoteAsset') == 'USDT' and s.get('contractType') == 'PERPETUAL' and s.get('status') == 'TRADING':
@@ -962,12 +963,12 @@ async def get_all_futures_symbols() -> List[str]:
 
 async def find_contract_address(symbol: str, binance_coins: List[dict] = None, futures_symbols: List[str] = None):
     sym = symbol.upper().replace('USDT', '')
-    
+
     if binance_coins:
         bn_results = find_in_binance_coins(sym, binance_coins)
         if bn_results:
             return bn_results
-    
+
     try:
         # 使用 DexScreener 代替 CoinGecko 避免频率限制
         ds_results = await get_ca_from_dexscreener(sym)
@@ -1018,7 +1019,7 @@ async def get_token_info(token_address,chain='bsc'):
             token_address,
         ],
     }
-    
+
     url = 'https://gmgn.ai/api/v1/mutil_window_token_info'
     if is_windows:
         url = url.replace('https://gmgn.ai', 'http://43.163.209.171:8812')
@@ -1028,7 +1029,7 @@ async def get_token_info(token_address,chain='bsc'):
         response = await client.post(url, headers=headers, json=json_data)
         #response.raise_for_status()
         #data = response.json()
-    
+
     #print(f'{response.text=}')
     data= response.json() if response.status_code == 200 else None
     if data and data.get('code') == 0:
@@ -1060,7 +1061,7 @@ async def get_historical_oi(symbol, period='5m', limit=100, startTime=None, endT
         params["startTime"] = startTime
     if endTime:
         params["endTime"] = endTime
-        
+
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     }
@@ -1104,4 +1105,3 @@ async def get_web_oi_stats(symbol, period_minutes=5):
     except Exception as e:
         logger.warning(f"Failed to get_web_oi_stats for {symbol}: {e}")
         return None
-

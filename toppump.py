@@ -63,7 +63,7 @@ vibeLevelPos={
     2:100,
     3:200
 }
-    
+
 
 async def place_future_order(sym,vibelevel):
     possize = vibeLevelPos[vibelevel]
@@ -72,7 +72,7 @@ async def place_future_order(sym,vibelevel):
         sym = sym+"USDT"
     # Place order
     place_res = None
-    
+
     try:
         place_res = await place_contract_order(
             symbol=sym.upper(),
@@ -87,7 +87,7 @@ async def place_future_order(sym,vibelevel):
         retCode = place_res.get('response',{}).get('retCode')
         if retCode==0:
             return place_res
-        
+
     except Exception as e:
         logger.opt(exception=True).warning(f"Place order failed: {e}")
 
@@ -103,9 +103,9 @@ async def place_future_order_no_dup(sym,vibelevel):
                 msg=f'检测到已有持仓，无法重复下单，当前持仓币种{holdingsym}，未实现盈亏 {v:.2f} USD\n\n'
                 logger.info(msg)
                 #await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
-                #await utils.send_notification_feishu_async('https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9', 
+                #await utils.send_notification_feishu_async('https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9',
                 #msg,title="bybit 自动下单合约\n\n")
-                return 
+                return
     return await place_future_order(sym,vibelevel)
 
 
@@ -116,7 +116,7 @@ async def send_notification_async(
     endpoint: str = 'http://gossiphere.com:9999/cmd',
     timeout_sec: float = 10.0,
 ) -> None:
-    
+
     if touser=='veryverybad':
         await utils.send_notification_feishu_async(utils.feishu_myself, content, title)
     else:
@@ -139,7 +139,7 @@ async def report_pos_pnl():
     prodetail= await get_position_profit(api_key,api_secret, testnet=False)
     if prodetail:
         profit,detail =prodetail
-        
+
         pnldetail = {item['symbol']:float(item['unrealisedPnl']) for item in detail}
         msg=f'总利润：{profit:.2f}\n\n'
         msg +=f'仓位明细：\n'
@@ -147,7 +147,7 @@ async def report_pos_pnl():
         detail.sort(key=lambda x: float(x['unrealisedPnl']), reverse=True)
         foundloss=False
         for id,item in enumerate(detail):
-            
+
             symbol = item['symbol'][:-4]
             unrealisedPnl = float(item['unrealisedPnl'])
             if unrealisedPnl<0 and not foundloss:
@@ -158,7 +158,7 @@ async def report_pos_pnl():
             msg +=f'{id+1}){symbol}：{positionValue:.2f} USD({unrealisedPnl:.2f} USD)\n'
         msg +=f'\n\n{utils.time_to_string(time.time())}'
         print(msg)
-        #await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")  
+        #await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
         await utils.send_notification_feishu_async('https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9',
                 msg,title="bybit 自动下单合约\n\n")
 
@@ -270,7 +270,7 @@ async def compute_energy(symbol_usdt: str) -> Dict[str, Any]:
         return out
     volumndata = volumndata[-9:]
     lowlist = [float(k[3]) for k in volumndata]
-    high = [float(k[2]) for k in volumndata]    
+    high = [float(k[2]) for k in volumndata]
     priceseries = lowlist + high
     priceseries.sort()
     priceseries = priceseries[1:]  # remove min
@@ -357,7 +357,7 @@ def filter_candidates(
     now = time.time()
     for r in rows:
         closeTime = r.get('closeTime',0)
-        if now - closeTime/1000 > 3600*2: #ALPACAUSDT 
+        if now - closeTime/1000 > 3600*2: #ALPACAUSDT
             continue
 
         sym = r.get("symbol", "")
@@ -508,8 +508,8 @@ async def  is_bnalpha(symbol: str) -> bool:
     if not alphatokens:
         return False
     return symbol.upper() in alphatokens
-    
-    
+
+
 async def cmd_run_simple(
     interval: int,
     limit: int,
@@ -538,7 +538,7 @@ async def cmd_run_simple(
     # energy_level = 2
     # await report_pos_pnl()
     # await place_future_order_no_dup("btc",2)
-    # await send_notification_async('veryverybad', f'下单 {sym} energy_level {energy_level}', title="bybit 自动下单合约\n\n")  
+    # await send_notification_async('veryverybad', f'下单 {sym} energy_level {energy_level}', title="bybit 自动下单合约\n\n")
     await report_pos_pnl()
     fundinghist=await utils.get_funding_rate_history("LSK")
     logger.info(f"最近LSK funding rate历史：error msg {fundinghist.get('message','无数据')}")
@@ -550,14 +550,14 @@ async def cmd_run_simple(
         ftime = item.get('calcTime','')
         fundingIntervalHours= item.get('fundingIntervalHours',8)
         ftimestr = utils.time_to_string(ftime/1000) if isinstance(ftime,(int,float)) else ftime
-        print(f"历史资金费率:{frate:.2f}% 时间:{ftimestr}({fundingIntervalHours}h)")    
+        print(f"历史资金费率:{frate:.2f}% 时间:{ftimestr}({fundingIntervalHours}h)")
     testsym='PARTI'
     realtime_fundingdata = await utils.get_realtime_funding_rate(testsym)
     realTimeFundingRate=None
     if realtime_fundingdata and realtime_fundingdata.get('lastFundingRate'):
         realTimeFundingRate = float(realtime_fundingdata.get('lastFundingRate',0.0))*100
         print(f"实时资金费率 {testsym}: {realTimeFundingRate:.2f}% ")
-                    
+
     testtokens=["ALICE",'RHEA']
     for t in testtokens:
         isalpha = await is_bnalpha(t)
@@ -609,15 +609,15 @@ async def cmd_run_simple(
                     energy_level = int(en.get("energy_level", 0))
                     vol_usd_list = en.get("vol_usd_list", [])
                     vol_last5 = vol_usd_list[-5:]
-                    
+
                     if energy_level >= 2 and max(vol_last5)>800*10000:
                         prev = last_alert_ts.get(sym, 0)
                         if now_ts - prev >= cooldown_secs:
                             last_alert_ts[sym] = now_ts
                             res = await place_future_order_no_dup(sym,energy_level)
                             success = res is not None
-                            #await send_notification_async('veryverybad', f'下单 {_base_from_symbol(sym)} energy_level {energy_level}\n结果：{success}', title="bybit 自动下单合约\n\n")  
-                            
+                            #await send_notification_async('veryverybad', f'下单 {_base_from_symbol(sym)} energy_level {energy_level}\n结果：{success}', title="bybit 自动下单合约\n\n")
+
                             await report_pos_pnl()
 
                             qv = _to_float(r, "quoteVolume")
@@ -647,14 +647,14 @@ async def cmd_run_simple(
                             last3Min045 = [x for x in last3 if x<0.46]
                             if max(last3)<0.49 or len(last3Min045)>1:
                                 msg.append(f'卖出情绪较重，留意行情\n')
-                                
+
 
                             fundinghist=await utils.get_funding_rate_history(sym)
-                            logger.info(f"最近 sym:{sym} funding rate历史：error msg {fundinghist.get('message','无数据')}") 
+                            logger.info(f"最近 sym:{sym} funding rate历史：error msg {fundinghist.get('message','无数据')}")
                             realtime_fundingdata = await utils.get_realtime_funding_rate(sym)
                             realTimeFundingRate=None
                             if realtime_fundingdata and realtime_fundingdata.get('lastFundingRate'):
-                                realTimeFundingRate = float(realtime_fundingdata.get('lastFundingRate',0.0))*100                            
+                                realTimeFundingRate = float(realtime_fundingdata.get('lastFundingRate',0.0))*100
                             fundingdata = fundinghist.get('data',[])
                             if fundingdata:
                                 msg.append(f"\n最近三次资金费率记录:")
@@ -670,7 +670,7 @@ async def cmd_run_simple(
                                     fundingIntervalHours= item.get('fundingIntervalHours',8)
                                     ftimestr = utils.time_to_string(ftime/1000) if isinstance(ftime,(int,float)) else ftime
                                     msg.append(f"{frate:.2f}% 时间:{ftimestr}({fundingIntervalHours}h)")
-                                    
+
                             # 代币解锁信息
                             unlock_events = await utils.get_token_unlock_events(_base_from_symbol(sym))
                             if unlock_events.get('past') or unlock_events.get('upcoming'):
@@ -690,6 +690,27 @@ async def cmd_run_simple(
                                 title=title,
                                 endpoint=endpoint,
                             )
+                            issuper=False
+                            if max(vol_last5)/min(vol_last5)>50:
+                                issuper = True
+                            for i,vol in enumerate(vol_last5):
+                                if issuper:
+                                    break
+                                if vol>10000000 and i>1 and vol_last5[i-1]<500000:
+                                    issuper=True
+                                    break
+                            if issuper:
+                                await send_notification_async(
+                                    utils.feishu_alpha_superbuy,
+                                    content,
+                                    title=title,
+                                    endpoint=endpoint,
+                                )
+
+
+
+
+
 
             # Save history
             try:

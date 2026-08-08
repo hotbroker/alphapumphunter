@@ -4,63 +4,70 @@
   "monitors": {
     "binance_monitor_drops": {
       "id": 1,
-      "name": "APHunter - 新币回撤监控",
+      "name": "AlphaPumpHunter - 新币回撤监控",
       "description": "监控 Binance 新上架永续合约的历史高点与当前价格，在回撤达到 40%/50% 时告警。进程脚本：binance_monitor_drops.py。",
       "interval": 120,
       "push_url": "https://uptime.sendcat.tech/api/push/UUWfJ2vwpH"
     },
     "scan_twitter_db": {
       "id": 2,
-      "name": "APHunter - Twitter 归档扫描",
+      "name": "AlphaPumpHunter - Twitter 归档扫描",
       "description": "每 10 秒从 GMGN Twitter 消息接口拉取关注账号动态，去重后写入 twitter_history.db。进程脚本：scan_twitter_db.py。",
       "interval": 30,
       "push_url": "https://uptime.sendcat.tech/api/push/cReknIfkeS"
     },
     "btc_eth_monitor": {
       "id": 3,
-      "name": "APHunter - BTC/ETH 波动监控",
+      "name": "AlphaPumpHunter - BTC/ETH 波动监控",
       "description": "监控 BTC、ETH 现货及永续合约的 1 分钟和 5 分钟异常波动并发送告警。进程脚本：btc_eth_monitor.py。",
       "interval": 60,
       "push_url": "https://uptime.sendcat.tech/api/push/hz10mDFvpA"
     },
     "binance_monitor": {
       "id": 4,
-      "name": "APHunter - Binance 起飞形态监控",
+      "name": "AlphaPumpHunter - Binance 起飞形态监控",
       "description": "每 5 分钟扫描 Binance 高成交额永续合约，结合 K 线成交量、主动买入和持仓量识别起飞形态。进程脚本：binance_monitor.py。",
       "interval": 360,
       "push_url": "https://uptime.sendcat.tech/api/push/tTJEsVz4SU"
     },
+    "binance_pullback_consolidation_monitor": {
+      "id": 10,
+      "name": "AlphaPumpHunter - 回调横盘监控",
+      "description": "每 5 分钟扫描 Binance 24h 成交额不少于 1 亿 USDT 的永续合约，识别阳线放量上涨、30% 回调和 5 小时横盘信号。进程脚本：binance_pullback_consolidation_monitor.py run。",
+      "interval": 360,
+      "push_url": "https://uptime.sendcat.tech/api/push/NF1LS7BY2W"
+    },
     "high_control_monitor": {
       "id": 5,
-      "name": "APHunter - 高控盘横盘监控",
+      "name": "AlphaPumpHunter - 高控盘横盘监控",
       "description": "每 5 分钟读取高控盘币种缓存，检查 K 线横盘及价格变化条件并发送告警。进程脚本：high_control_monitor.py。",
       "interval": 360,
       "push_url": "https://uptime.sendcat.tech/api/push/20YzMwt1Rl"
     },
     "toppump": {
       "id": 6,
-      "name": "APHunter - TopPump 能量扫描",
+      "name": "AlphaPumpHunter - TopPump 能量扫描",
       "description": "持续扫描 Binance 永续合约涨幅榜与 15 分钟成交能量，触发推送并可联动 Bybit 下单。进程脚本：toppump.py run。",
       "interval": 120,
       "push_url": "https://uptime.sendcat.tech/api/push/U19MHtCnMK"
     },
     "main": {
       "id": 7,
-      "name": "APHunter - Alpha 主监控",
+      "name": "AlphaPumpHunter - Alpha 主监控",
       "description": "持续刷新 MarketWebb Alpha 币种池，筛选合约独占资产并监控短周期涨幅、成交量、持仓和资金费率。进程脚本：main.py run。",
       "interval": 120,
       "push_url": "https://uptime.sendcat.tech/api/push/mU0yIdoVVJ"
     },
     "holder_monitor": {
       "id": 8,
-      "name": "APHunter - Holder 持仓采集",
+      "name": "AlphaPumpHunter - Holder 持仓采集",
       "description": "每 10 分钟同步 Alpha 高成交额币种，采集 Top10/Top100、CEX、Binance Alpha 持仓比例、成交额及 OI 到 SQLite。进程脚本：holder_monitor.py。",
       "interval": 720,
       "push_url": "https://uptime.sendcat.tech/api/push/QAdY66hr17"
     },
     "holder_server": {
       "id": 9,
-      "name": "APHunter - Holder 数据服务",
+      "name": "AlphaPumpHunter - Holder 数据服务",
       "description": "提供 Holder 监控前端和 SQLite 查询 API 的 FastAPI 服务，监听 7009 端口。进程脚本：holder_server.py。",
       "interval": 120,
       "push_url": "https://uptime.sendcat.tech/api/push/OB2ztEd8O3"

@@ -1,6 +1,6 @@
 # Uptime Kuma 监管
 
-本项目为以下 9 个常驻进程配置 Uptime Kuma Push Monitor。业务脚本只把心跳写入本地后台队列，实际 HTTP 请求由守护线程发送；Kuma 网络超时或不可用不会阻塞行情扫描、数据库写入和告警逻辑。
+本项目为以下 10 个常驻进程配置 Uptime Kuma Push Monitor。业务脚本只把心跳写入本地后台队列，实际 HTTP 请求由守护线程发送；Kuma 网络超时或不可用不会阻塞行情扫描、数据库写入和告警逻辑。
 
 ## 监控列表
 
@@ -10,6 +10,7 @@
 | `scan_twitter_db` | AlphaPumpHunter - Twitter 归档扫描 | 每次拉取和归档完成 | 30 秒 |
 | `btc_eth_monitor` | AlphaPumpHunter - BTC/ETH 波动监控 | 每轮 BTC/ETH 现货及合约检查完成 | 60 秒 |
 | `binance_monitor` | AlphaPumpHunter - Binance 起飞形态监控 | 每轮高成交额合约扫描完成 | 360 秒 |
+| `binance_pullback_consolidation_monitor` | AlphaPumpHunter - 回调横盘监控 | 每轮 60 根 1h K 线形态扫描完成 | 360 秒 |
 | `high_control_monitor` | AlphaPumpHunter - 高控盘横盘监控 | 每轮高控盘币种检查完成 | 360 秒 |
 | `toppump` | AlphaPumpHunter - TopPump 能量扫描 | 每轮涨幅榜和能量扫描完成 | 120 秒 |
 | `main` | AlphaPumpHunter - Alpha 主监控 | 每轮 Alpha 主扫描完成 | 120 秒 |
@@ -63,7 +64,7 @@ export UPTIME_KUMA_PUSH_URL_MAIN='https://uptime.example.com/api/push/token'
 
 1. 将本次修改和 `uptime_kuma_monitors.json` 同步到 `/home/ubuntu/alphapumphunter/`。
 2. 在服务器执行 `uv sync`，或继续使用现有虚拟环境安装新增依赖。
-3. 重启 9 个目标进程，使它们加载 `health_reporter.py`。
+3. 重启 10 个目标进程，使它们加载 `health_reporter.py`。
 4. 在 Kuma 中确认心跳消息从 `monitor started` 或 `cycle ok` 持续更新。
 
 成功轮次上报 `status=up`，主循环捕获到异常时上报 `status=down`。如果进程崩溃、被杀死或卡住而无法完成下一轮，Kuma 会因缺失心跳自动标记异常。

@@ -32,11 +32,14 @@ from typing import Any, Iterable, Optional
 import httpx
 from loguru import logger
 
+from health_reporter import KumaHealthReporter
+
 
 BINANCE_FAPI_URL = "https://fapi.binance.com"
 FEISHU_WEBHOOK = "https://open.feishu.cn/open-apis/bot/v2/hook/1299614d-97b5-45f4-8f3b-7969c5da8346"
 DEFAULT_STATE_FILE = "pullback_consolidation_alert_history.json"
 BEIJING_TZ = timezone(timedelta(hours=8))
+health_reporter = KumaHealthReporter("binance_pullback_consolidation_monitor")
 
 
 @dataclass(frozen=True)
@@ -471,7 +474,7 @@ def build_config(args: argparse.Namespace) -> PatternConfig:
     )
 
 
-async def run_command(args: argparse.Namespace) -> None:
+async def run_command(args: argparse.Namespace) -> tuple[int, int]:
     config = build_config(args)
     end_time_ms = parse_end_time(args.end_time)
     patterns = await scan_once(
@@ -481,23 +484,32 @@ async def run_command(args: argparse.Namespace) -> None:
         end_time_ms=end_time_ms,
         concurrency=args.concurrency,
     )
-    await report_patterns(
+    alerts_sent = await report_patterns(
         patterns,
         notify=args.notify,
         webhook=args.webhook,
         state_file=Path(args.state_file),
         cooldown_seconds=args.cooldown_minutes * 60,
     )
+    return len(patterns), alerts_sent
 
 
 async def monitor_command(args: argparse.Namespace) -> None:
     logger.info("Starting pullback-consolidation monitor; interval={} seconds", args.interval)
+    health_reporter.report_up(
+        f"monitor started; interval={args.interval}s; min_quote={format_usdt(args.min_quote_volume)} USDT"
+    )
     while True:
         started = time.monotonic()
         try:
-            await run_command(args)
+            pattern_count, alerts_sent = await run_command(args)
+            health_reporter.report_up(
+                f"cycle ok; patterns={pattern_count}; alerts_sent={alerts_sent}",
+                (time.monotonic() - started) * 1000,
+            )
         except Exception as exc:  # keep the long-running monitor alive on transient API failures
             logger.exception("Monitor cycle failed: {}", exc)
+            health_reporter.report_down(f"monitor cycle failed: {exc}")
         elapsed = time.monotonic() - started
         await asyncio.sleep(max(1.0, args.interval - elapsed))
 

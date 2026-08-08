@@ -22,6 +22,16 @@ Uptime Kuma 常驻进程监管与异步健康上报说明见 `UPTIME_KUMA.md`。
 - **核心逻辑**: 通过计算成交额爆发倍数（Energy Level）和买入情绪，识别“真突围”信号。
 - **操作**: 支持按能量等级自动在 Bybit 下单及损益上报。
 
+### 4. 回调后横盘监控 (`binance_pullback_consolidation_monitor.py`)
+- **功能**: 从 24h 成交额不少于 1 亿 USDT 的币安 USDT 永续合约中，使用 60 根已收盘 1h K 线寻找“阳线放量上涨 → 回调至少 30% → 最近 5 小时横盘”的信号。
+- **风控过滤**: 从开始放量到阶段高点必须上涨至少 25%，且不超过 2.5 倍；横盘高低区间默认不超过 12%。
+- **告警**: `run` 模式默认推送到指定飞书机器人，并将相同形态按 24 小时冷却去重。
+- **ACEUSDT 历史验证**:
+  ```bash
+  uv run python binance_pullback_consolidation_monitor.py scan \
+    --symbol ACEUSDT --end-time '2026-08-08 11:00:00+08:00' --no-notify
+  ```
+
 ---
 
 ## 持仓 (Holder) 分析系统

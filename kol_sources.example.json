@@ -1,0 +1,80 @@
+{
+  "defaults": {
+    "enabled": true,
+    "proxy": "default"
+  },
+  "proxies": {
+    "default": {
+      "enabled": false,
+      "strategy": "source_hash",
+      "urls": [],
+      "no_proxy": []
+    }
+  },
+  "sources": {
+    "alpha_surge": {
+      "interval_seconds": 45,
+      "window_minutes": 8,
+      "threshold_pct": 6.5,
+      "refresh_minutes": 20,
+      "source_cooldown_minutes": 5,
+      "min_15m_quote_volume": 4000000,
+      "energy_volume_ratio": 5.0,
+      "energy_level3_quote_volume": 15000000
+    },
+    "top_pump_energy": {
+      "interval_seconds": 45,
+      "candidate_limit": 50,
+      "min_quote_volume_24h": 10000000,
+      "min_change_24h_pct": 0.0,
+      "source_cooldown_minutes": 5,
+      "price_move_filter_pct": 6.0,
+      "min_any_15m_quote_volume": 500000,
+      "energy_trigger_quote_volume": 4000000,
+      "energy_volume_ratio": 5.0,
+      "energy_level3_quote_volume": 15000000,
+      "alert_min_energy_level": 1,
+      "alert_min_recent_quote_volume": 4000000
+    },
+    "pullback_consolidation": {
+      "interval_seconds": 180,
+      "min_quote_volume_24h": 50000000,
+      "lookback_hours": 60,
+      "consolidation_hours": 3,
+      "volume_baseline_hours": 4,
+      "min_volume_spike_multiple": 2.0,
+      "min_volume_spike_quote": 500000,
+      "min_rise_pct": 15.0,
+      "max_runup_multiple": 3.0,
+      "min_pullback_pct": 20.0,
+      "max_consolidation_range_pct": 18.0,
+      "max_consolidation_close_drift_pct": 10.0,
+      "concurrency": 5,
+      "source_cooldown_minutes": 60,
+      "state_file": "kol_pullback_consolidation_alert_history.json"
+    },
+    "instant_drop_trigger": {
+      "drop_threshold": 0.12,
+      "min_quote_volume_24h": 30000000,
+      "source_cooldown_seconds": 3600,
+      "check_interval_seconds": 10,
+      "per_symbol_delay_seconds": 0.15,
+      "signal_file": "kol_triggered_signals.json",
+      "state_file": "kol_monitor_volume_drops_state.json"
+    },
+    "instant_opportunity": {
+      "signal_file": "kol_triggered_signals.json",
+      "state_file": "kol_monitor_hunter_state.json",
+      "poll_interval_seconds": 10,
+      "evaluation_delay_minutes": 8,
+      "short_volume_multiple": 1.25,
+      "short_quote_volume_15m": 6000000,
+      "short_quote_volume_5m": 2000000,
+      "long_recovery_volume_ratio": 0.65,
+      "large_drop_threshold": 0.35,
+      "volume_trigger_drop_threshold": 0.12,
+      "history_drop_threshold_1": 0.35,
+      "history_drop_threshold_2": 0.45
+    }
+  }
+}

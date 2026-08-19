@@ -10,15 +10,19 @@ from datetime import datetime, timezone
 from typing import Deque, Dict, Iterable, List, MutableMapping, Optional, Set, Tuple,Any
 import traceback
 
+from kol_runtime import configure_source, setting
+
+KOL_SOURCE = configure_source("alpha_surge")
+
 import httpx
 from loguru import logger
 import utils
 
 import os
 from datetime import datetime, timedelta
-from bybit_async import place_contract_order, get_position_profit
 import toppump
 from health_reporter import KumaHealthReporter
+from kol_signal import emit_signal
 
 
 health_reporter = KumaHealthReporter("main")
@@ -68,23 +72,7 @@ async def send_notification_async(
     timeout_sec: float = 10.0,
 ) -> None:
 
-    if touser=='veryverybad':
-        await utils.send_notification_feishu_async(utils.feishu_myself, content, title)
-    else:
-        await utils.send_notification_feishu_async(utils.feishu_alpha,content, title)
-
-
-    payload = {
-        "cmd": "sendtext",
-        "touser": touser,
-        "msgcontent": f"{title}\n{content}",
-    }
-    try:
-        async with httpx.AsyncClient(timeout=timeout_sec) as client:
-            r = await client.post(endpoint, json=payload)
-            logger.debug(f"notify status={r.status_code} body={r.text[:200]}")
-    except Exception as e:
-        logger.warning(f"notify failed: {e}")
+    logger.debug("KOL source notification suppressed: {}", title.strip())
 
 
 class MarketWebbAsync:
@@ -461,7 +449,6 @@ async def report_history_ranked(history_ranked,alphalist):
         else:
             logger.info("Failed to fetch Binance futures data.")
         print(repportmsg)
-        await send_notification_async(alpha_hunter_group, repportmsg, title="Alpha PumpHunter Alert\n")
 
 def save_highest_record(history_ranked,item):
     sym = item.get("symbol","-")
@@ -555,49 +542,9 @@ async def fetch_binance_futures_24h() -> List[Dict[str, Any]]:
             raise ValueError("Unexpected response format from Binance 24hr ticker")
         return data
 
-async def place_future_order(sym,vibelevel):
-    possize = vibeLevelPos.get(vibelevel,0)
-    if possize == 0:
-        logger.warning(f"vibelevel {vibelevel} not found, skip order")
-        return None
-
-    if not sym.endswith("USDT"):
-        sym = sym+"USDT"
-    # Place order
-    place_res = None
-
-    try:
-        place_res = await place_contract_order(
-            symbol=sym.upper(),
-            leverage=10,
-            usdt_value=possize,
-            api_key=api_key,
-            api_secret=api_secret,
-            testnet=False,
-        )
-        logger.info(f"Order response: {place_res}")
-        #Order response: {'price': 103388.5, 'qty': '0.001', 'response': {'retCode': 0, 'retMsg': 'OK', 'result': {'orderId': '7f9658d5-ebe8-4595-a065-d77eb435b3a7', 'orderLinkId': ''}, 'retExtInfo': {}, 'time': 1762551268306}}
-        retCode = place_res.get('place_res',{}).get('retCode')
-        if retCode==0:
-            return place_res
-
-    except Exception as e:
-        logger.opt(exception=True).warning(f"Place order failed: {e}")
-
 async def place_future_order_no_dup(sym,vibelevel):
-    prodetail= await get_position_profit(api_key,api_secret, testnet=False)
-    logger.info(f'before sym:{sym}current position detail: {prodetail}')
-    if prodetail:
-        profit,detail =prodetail
-        pnldetail = {item['symbol']:float(item['unrealisedPnl']) for item in detail}
-        for k,v in pnldetail.items():
-            holdingsym = k[:-4]
-            if holdingsym.upper() == sym.upper():
-                msg=f'检测到已有持仓，无法重复下单，当前持仓币种{holdingsym}，未实现盈亏 {v:.2f} USD\n\n'
-                logger.info(msg)
-                #await send_notification_async('veryverybad', msg, title="bybit 自动下单合约\n\n")
-                return
-    return await place_future_order(sym,vibelevel)
+    logger.info("KOL source never places orders; skipped {} L{}", sym, vibelevel)
+    return None
 
 async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, refresh_minutes: int, log_level: str, cooldown_minutes: int):
     setup_logger(log_level or os.getenv("APH_LOG_LEVEL", "INFO"))
@@ -645,7 +592,6 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         orderlist = load_order_list()
 
         # await place_future_order("AR",1)
-        # profit,detail = await get_position_profit(api_key,api_secret, testnet=False)
         # pnldetail = {item['symbol']:item['unrealisedPnl'] for item in detail}
         # print(f'profit :{profit}, pnldetail {pnldetail}')
         bnfutures = await toppump.fetch_binance_futures_24h()
@@ -672,7 +618,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
             if tick_start-report_pnl_time>3600*8:
                 report_pnl_time=tick_start
-                await toppump.report_pos_pnl()
+                logger.debug("KOL source skips position reporting")
             try:
                 # optional refresh of universe
                 if tick_start >= next_refresh:
@@ -796,7 +742,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 continue
 
                             volUSDlist = [float(k[7]) for k in volumndata]
-                            limit_15VOl = 800*10000
+                            limit_15VOl = setting(KOL_SOURCE, "min_15m_quote_volume", 8_000_000.0)
                             if max(volUSDlist[-5:])<limit_15VOl:
                                 print(f'{sym} have no {limit_15VOl} trade vol')
                                 continue
@@ -815,12 +761,13 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             if first5[0]>100*10000: #如果最小的有1m，其实不用去平均，就用最小的来比较
                                 average = first5[0]
 
-                            good1 = lastMax>800*10000 and lastMax/average>8
+                            energy_ratio = setting(KOL_SOURCE, "energy_volume_ratio", 8.0)
+                            good1 = lastMax > limit_15VOl and lastMax / average > energy_ratio
 
                             if good1:
                                 goodvibe="能量不错"
                                 goodvibeLevel=2
-                                if lastMax>2000*10000:
+                                if lastMax > setting(KOL_SOURCE, "energy_level3_quote_volume", 20_000_000.0):
                                     goodvibeLevel=3
                                     goodvibe="能量波动相当好🔥"
 
@@ -841,18 +788,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             history_ranked[sym] = newit
                             save_history(history_ranked)
 
-                            order = orderlist.get(sym)
-                            if not order:
-                                placeorder = await place_future_order_no_dup(sym,goodvibeLevel)
-                                if placeorder:
-                                    logger.info(f'succ place order 【{sym}】 goodvibeLevel {goodvibeLevel}')
-                                    orderlist[sym]={"placetime":int(time.time()),
-                                                    "vibelevel":goodvibeLevel,
-                                                    "orderRes":placeorder}
-                                    utils.save_status(orderlist)
-                            else:
-                                placetime = order.get('placetime')
-                                logger.info(f'already place order {sym} at placetime: {utils.time_to_string(placetime)}')
+                            logger.debug("KOL source skips all trading actions for {}", sym)
 
 
                         msg = ''
@@ -1010,7 +946,26 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                             title=f"Alpha起飞告警 🔥🔥🔥 推荐：{sym}\n"
                         if is_high_control:
                             title="高控盘-"+title
-                        await send_notification_async(alpha_hunter_group, msg, title=title)
+                        emit_signal(
+                            symbol=sym,
+                            source="kol_main.py",
+                            indicator="alpha_surge",
+                            direction="LONG",
+                            price=last_px,
+                            summary=f"Alpha 币 {window_min} 分钟上涨 {change:.2f}%，并通过成交量过滤",
+                            details={
+                                "change_pct": round(change, 4),
+                                "window_minutes": window_min,
+                                "energy_level": goodvibeLevel,
+                                "energy_note": goodvibe,
+                                "futures_quote_volume_24h": futureQV,
+                                "alpha_change_24h_pct": it.get("percentChange24h"),
+                                "market_cap": it.get("marketCap"),
+                                "high_control": is_high_control,
+                            },
+                            fingerprint=f"{token_id}:{int(now // max(window_secs, 1))}",
+                        )
+
                         vol_last5 = volUSDlist[-5:]
                         issuper=False
                         if max(vol_last5)/min(vol_last5)>50:
@@ -1022,7 +977,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                                 issuper=True
                                 break
                         if issuper:
-                            await send_notification_async(utils.feishu_alpha_superbuy, msg, title=title)
+                            logger.debug("KOL source classified {} as super signal", sym)
 
 
 
@@ -1043,7 +998,6 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                 stackmsg = traceback.format_exc()
                 logger.opt(exception=True).error(f"Monitor loop error: {e}")
                 health_reporter.report_down(f"monitor loop error: {e}")
-                await send_notification_async('veryverybad', f"Monitor loop error: {e}\n{stackmsg}", title="Alpha PumpHunter Error\n")
                 await asyncio.sleep(max(5.0, interval / 2))
 
 
@@ -1054,11 +1008,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_scan = sub.add_parser("scan", help="List alpha derivatives-only assets")
 
     p_run = sub.add_parser("run", help="Run async monitor from alpha list and alert on 10-minute surges")
-    p_run.add_argument("--interval", type=int, default=60, help="Polling interval seconds (default: 60)")
-    p_run.add_argument("--window", type=int, default=10, help="Window minutes for change calc (default: 10)")
-    p_run.add_argument("--threshold", type=float, default=10.0, help="Threshold percent rise within window (default: 10)")
-    p_run.add_argument("--refresh-minutes", type=int, default=30, help="Universe refresh interval minutes (default: 30)")
-    p_run.add_argument("--cooldown-minutes", type=int, default=10, help="Cooldown minutes between alerts per symbol (default: 10)")
+    p_run.add_argument("--interval", type=int, default=setting(KOL_SOURCE, "interval_seconds", 60), help="Polling interval seconds")
+    p_run.add_argument("--window", type=int, default=setting(KOL_SOURCE, "window_minutes", 10), help="Change window minutes")
+    p_run.add_argument("--threshold", type=float, default=setting(KOL_SOURCE, "threshold_pct", 10.0), help="Rise threshold percent")
+    p_run.add_argument("--refresh-minutes", type=int, default=setting(KOL_SOURCE, "refresh_minutes", 30), help="Universe refresh interval minutes")
+    p_run.add_argument("--cooldown-minutes", type=int, default=setting(KOL_SOURCE, "source_cooldown_minutes", 10), help="Source cooldown; publisher still enforces one hour")
     p_run.add_argument("--log-level", default=os.getenv("APH_LOG_LEVEL", "INFO"), help="Log level (DEBUG, INFO, WARNING, ...)")
 
     return p

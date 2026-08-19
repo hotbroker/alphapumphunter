@@ -20,7 +20,6 @@ import utils
 
 import os
 from datetime import datetime, timedelta
-import toppump
 from health_reporter import KumaHealthReporter
 from kol_signal import emit_signal
 
@@ -59,20 +58,8 @@ vibeLevelPos={
 
 
 
-api_key, api_secret = utils.load_keys()
-
 def setup_logger(level: str):
     pass
-
-async def send_notification_async(
-    touser: str,
-    content: str,
-    title: str = "notification",
-    endpoint: str='http://gossiphere.com:9999/cmd',
-    timeout_sec: float = 10.0,
-) -> None:
-
-    logger.debug("KOL source notification suppressed: {}", title.strip())
 
 
 class MarketWebbAsync:
@@ -435,7 +422,7 @@ async def report_history_ranked(history_ranked,alphalist):
                 repportmsg += f'{cnt}）{sym} {perc:.2f}%   ({priceperc:.2f}%){fired}\n\n'
         repportmsg += f'\n\n总计{len(sorted_pumplog)}个币种在过去5天内被提示过\n\n'
 
-        bnfutures = await toppump.fetch_binance_futures_24h()
+        bnfutures = await fetch_binance_futures_24h()
         if bnfutures:
             #sort by priceChangePercent
             sorted_bnfutures = sorted(bnfutures, key=lambda x: float(x.get("priceChangePercent", 0)), reverse=True)
@@ -542,10 +529,6 @@ async def fetch_binance_futures_24h() -> List[Dict[str, Any]]:
             raise ValueError("Unexpected response format from Binance 24hr ticker")
         return data
 
-async def place_future_order_no_dup(sym,vibelevel):
-    logger.info("KOL source never places orders; skipped {} L{}", sym, vibelevel)
-    return None
-
 async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, refresh_minutes: int, log_level: str, cooldown_minutes: int):
     setup_logger(log_level or os.getenv("APH_LOG_LEVEL", "INFO"))
     async with httpx.AsyncClient(timeout=15) as client:
@@ -591,10 +574,9 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
         roundcnt=0
         orderlist = load_order_list()
 
-        # await place_future_order("AR",1)
         # pnldetail = {item['symbol']:item['unrealisedPnl'] for item in detail}
         # print(f'profit :{profit}, pnldetail {pnldetail}')
-        bnfutures = await toppump.fetch_binance_futures_24h()
+        bnfutures = await fetch_binance_futures_24h()
         if bnfutures:
             #sort by priceChangePercent
             sorted_bnfutures = sorted(bnfutures, key=lambda x: float(x.get("priceChangePercent", 0)), reverse=True)

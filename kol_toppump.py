@@ -26,8 +26,6 @@ if __name__ == "__main__":
 
 logger.info(f'start with file {os.path.basename(os.path.abspath(__file__))} pid {os.getpid()}@ filetime {datetime.fromtimestamp(os.path.getctime(os.path.abspath(__file__))).strftime("%Y-%m-%d, %H:%M:%S")}')
 
-api_key, api_secret = utils.load_keys()
-
 try:
     from utils import format_big_number, get_continuousKlines, time_to_string
 except Exception:
@@ -60,23 +58,6 @@ except Exception:
         ts = ts or _time.time()
         return _dt.fromtimestamp(ts).strftime('%Y-%m-%d, %H:%M:%S')
 
-
-async def place_future_order_no_dup(sym,vibelevel):
-    logger.info("KOL source never places orders; skipped {} L{}", sym, vibelevel)
-    return None
-
-
-async def send_notification_async(
-    touser: str,
-    content: str,
-    title: str = "TopPump Alert",
-    endpoint: str = 'http://gossiphere.com:9999/cmd',
-    timeout_sec: float = 10.0,
-) -> None:
-    logger.debug("KOL source notification suppressed: {}", title.strip())
-
-async def report_pos_pnl():
-    logger.debug("KOL source skips Bybit position reporting")
 
 @dataclass
 class PricePoint:

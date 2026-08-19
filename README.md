@@ -156,6 +156,23 @@ HTTP、HTTPS、SOCKS5/SOCKS5H 以及代理池：
 `source_hash` 会让五个来源稳定分散到代理池；设置 `KOL_PROXY_INDEX=1` 可强制某个进程
 使用指定出口。代理凭证日志会自动脱敏。未配置可用代理时保持 `enabled: false`。
 
+### 调整信号激进程度
+
+所有 KOL 信号阈值都在 `~/.config/alphapumphunter/kol_sources.json`，不需要修改 Python
+脚本。降低过滤门槛、缩短冷却会触发更多信号：
+
+| 来源 | 增加信号的主要调整 |
+|---|---|
+| `alpha_surge` | 降低 `threshold_pct`、`min_15m_quote_volume`，缩短 `window_minutes` 和 `source_cooldown_minutes` |
+| `top_pump_energy` | 降低 `price_move_filter_pct`、`alert_min_energy_level`、`alert_min_recent_quote_volume` 和 `min_quote_volume_24h` |
+| `pullback_consolidation` | 降低 `min_volume_spike_multiple`、`min_rise_pct`、`min_pullback_pct`，提高两个 `max_consolidation_*` 容差 |
+| `instant_drop_trigger` | 降低 `drop_threshold`、`min_quote_volume_24h` 和 `source_cooldown_seconds`；`0.10` 表示跌幅 10% |
+| `instant_opportunity` | 降低 `short_volume_multiple`、两个 `short_quote_volume_*` 和 `evaluation_delay_minutes` |
+
+信号源冷却只控制检测频率。若希望同一账号对同币种同指标发帖更频繁，还要在
+`kol_config.json` 中同步降低对应账号的 `cooldown_seconds`。配置文件保存后，安装器创建的
+systemd path watcher 会自动重启对应服务加载新值。
+
 ### 去重规则
 
 默认冷却键为 `账号 + 币种 + 指标`，冷却时间为 3600 秒。例如同一账号一小时内不会
@@ -173,6 +190,27 @@ HTTP、HTTPS、SOCKS5/SOCKS5H 以及代理池：
 
 ### 运行
 
+服务器从 Git clone 后可直接使用安装器：
+
+```bash
+chmod +x install_kol.sh run_kol_sources.sh
+./install_kol.sh
+```
+
+首次运行会安装依赖，并在 `~/.config/alphapumphunter/` 创建两份真实配置。填入 AI、
+Square、飞书和代理配置后启动：
+
+```bash
+./install_kol.sh --start
+sudo loginctl enable-linger "$USER"
+```
+
+KOL 副本不需要 Binance/Bybit 交易 API Key。安装器会创建发布器、五信号源和配置监听
+服务；保存 `kol_config.json` 会自动重载发布器，保存 `kol_sources.json` 会自动重载信号源。
+未给每个信号源配置代理时，安装器只启动发布器，不启动高频 Binance 监控。
+
+手动运行方式如下。
+
 启动独立的 KOL 信号副本。瞬时机会需要同时启动 trigger 和 evaluator：
 
 ```bash
@@ -189,12 +227,13 @@ uv run python kol_instant_opportunity_hunter.py --mode monitor
 uv run python kol_publisher.py run
 ```
 
-当前机器已安装用户级 `alphapumphunter-kol.service`。修改账号配置后重启服务，常用命令：
+安装器生成两个用户级服务，常用命令：
 
 ```bash
-systemctl --user status alphapumphunter-kol.service
-systemctl --user restart alphapumphunter-kol.service
-journalctl --user -u alphapumphunter-kol.service -f
+systemctl --user status alphapumphunter-kol-publisher.service
+systemctl --user status alphapumphunter-kol-sources.service
+journalctl --user -u alphapumphunter-kol-publisher.service -f
+journalctl --user -u alphapumphunter-kol-sources.service -f
 ```
 
 发布前可做一次 AI dry-run；它会消费一条待处理 delivery，但不会调用 Square：

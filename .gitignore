@@ -1,0 +1,28 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Local Uptime Kuma push tokens
+uptime_kuma_monitors.json
+
+# Runtime alert de-duplication state
+pullback_consolidation_alert_history.json
+
+# Binance Square KOL local credentials and runtime state
+kol_config.json
+kol_signals.db
+kol_signals.db-shm
+kol_signals.db-wal
+logkol_publisher.py.log
+kol_triggered_signals.json
+kol_monitor_volume_drops_state.json
+kol_monitor_hunter_state.json
+kol_pullback_consolidation_alert_history.json
+logkol_*.py.log

@@ -11,6 +11,7 @@ import re
 import sqlite3
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
@@ -27,6 +28,7 @@ DEFAULT_CONFIG_PATH = os.getenv("KOL_CONFIG_PATH") or (
 SQUARE_POST_URL = (
     "https://www.binance.com/bapi/composite/v1/public/pgc/openApi/content/add"
 )
+BINANCE_FAPI_KLINES_URL = "https://www.binance.com/fapi/v1/klines"
 
 
 @dataclass(frozen=True)
@@ -36,6 +38,8 @@ class AIConfig:
     model: str
     temperature: float = 0.9
     timeout_seconds: float = 45.0
+    concise: bool = False
+    max_chars: int = 1200
 
 
 @dataclass(frozen=True)
@@ -59,6 +63,8 @@ class AccountConfig:
     enabled: bool = True
     model: Optional[str] = None
     temperature: Optional[float] = None
+    concise: Optional[bool] = None
+    max_chars: Optional[int] = None
     cooldown_seconds: int = 3600
     min_delay_seconds: float = 0.0
     max_delay_seconds: float = 0.0
@@ -157,6 +163,16 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
                     if account_ai.get("temperature") is not None
                     else None
                 ),
+                concise=(
+                    bool(account_ai["concise"])
+                    if account_ai.get("concise") is not None
+                    else None
+                ),
+                max_chars=(
+                    int(account_ai["max_chars"])
+                    if account_ai.get("max_chars") is not None
+                    else None
+                ),
                 cooldown_seconds=int(row.get("cooldown_seconds", 3600)),
                 min_delay_seconds=float(delay[0]),
                 max_delay_seconds=float(delay[1]),
@@ -169,6 +185,8 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
             model=str(ai_data.get("model") or "").strip(),
             temperature=float(ai_data.get("temperature", 0.9)),
             timeout_seconds=float(ai_data.get("timeout_seconds", 45)),
+            concise=bool(ai_data.get("concise", False)),
+            max_chars=int(ai_data.get("max_chars", 1200)),
         ),
         accounts=tuple(accounts),
         publisher=PublisherConfig(
@@ -192,6 +210,8 @@ def validate_config(config: AppConfig, *, require_square_key: bool = True) -> No
         raise RuntimeError("ai.base_url must be an HTTP(S) URL")
     if not config.ai.model:
         raise RuntimeError("ai.model must not be empty")
+    if not 50 <= config.ai.max_chars <= 2000:
+        raise RuntimeError("ai.max_chars must be between 50 and 2000")
     enabled = [account for account in config.accounts if account.enabled]
     if not enabled:
         raise RuntimeError("At least one account must be enabled")
@@ -205,6 +225,10 @@ def validate_config(config: AppConfig, *, require_square_key: bool = True) -> No
             raise RuntimeError(f"Account {account.account_id} cooldown must be non-negative")
         if account.min_delay_seconds < 0 or account.max_delay_seconds < account.min_delay_seconds:
             raise RuntimeError(f"Account {account.account_id} has an invalid posting delay range")
+        if account.max_chars is not None and not 50 <= account.max_chars <= 2000:
+            raise RuntimeError(
+                f"Account {account.account_id} ai.max_chars must be between 50 and 2000"
+            )
     if not 100 <= config.publisher.max_post_chars <= 2000:
         raise RuntimeError("publisher.max_post_chars must be between 100 and 2000")
     if config.publisher.feishu_enabled and not config.publisher.feishu_webhook.startswith(
@@ -217,19 +241,31 @@ def _chat_url(base_url: str) -> str:
     return base_url + "/chat/completions" if base_url.rstrip("/").endswith("/v1") else base_url + "/v1/chat/completions"
 
 
-def build_messages(signal: Mapping[str, Any], tone: ToneConfig, max_chars: int) -> list[dict[str, str]]:
+def build_messages(
+    signal: Mapping[str, Any],
+    tone: ToneConfig,
+    max_chars: int,
+    *,
+    concise: bool = False,
+) -> list[dict[str, str]]:
     symbol = normalize_symbol(str(signal["symbol"]))
     details = json.loads(signal.get("details_json") or "{}")
     direction_text = {"LONG": "看多/做多", "SHORT": "看空/做空", "WATCH": "观察等待"}[
         str(signal["direction"])
     ]
     requirements = "\n".join(f"- {item}" for item in tone.requirements)
+    concise_rule = (
+        "- 使用简短回复：直接给结论，只保留 2-3 个最关键依据，不复述全部输入数据。"
+        if concise
+        else "- 在字数限制内给出必要的行情依据，避免机械罗列全部输入数据。"
+    )
     system = f"""你是币安广场的交易信号 KOL，当前口吻配置为“{tone.name}”。
 人设：{tone.persona}
 
 硬性规则：
 - 只输出最终帖子正文，不要标题标签、解释、Markdown 代码块。
 - 全文使用简体中文，控制在 {max_chars} 个字符以内。
+{concise_rule}
 - 必须原样包含可点击 cashtag ${symbol}，不得写任何 URL。
 - 明确表达“{direction_text}”，不得把 LONG/SHORT 方向写反。
 - 只能使用输入信号里的事实；不得捏造价格、涨幅、指标、新闻或内幕。
@@ -245,6 +281,8 @@ def build_messages(signal: Mapping[str, Any], tone: ToneConfig, max_chars: int) 
             "信号摘要": signal["summary"],
             "触发价格": signal.get("price"),
             "详细数据": details,
+            "近2小时15分钟K线": signal.get("kline_context") or [],
+            "K线说明": "按时间从旧到新排列；最新一根可能尚未收盘。",
         },
         ensure_ascii=False,
         indent=2,
@@ -272,14 +310,72 @@ def clean_generated_text(text: str, *, symbol: str, direction: str, max_chars: i
     return cleaned
 
 
+def parse_recent_15m_klines(
+    rows: Any, *, now_ms: Optional[int] = None
+) -> tuple[dict[str, Any], ...]:
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("Binance returned no 15m kline data")
+    current_ms = int(time.time() * 1000) if now_ms is None else now_ms
+    result: list[dict[str, Any]] = []
+    for row in rows[-8:]:
+        if not isinstance(row, list) or len(row) < 11:
+            raise ValueError("Binance returned malformed 15m kline data")
+        open_time_ms = int(row[0])
+        result.append(
+            {
+                "open_time_utc": datetime.fromtimestamp(
+                    open_time_ms / 1000, timezone.utc
+                ).isoformat(timespec="minutes"),
+                "open": float(row[1]),
+                "high": float(row[2]),
+                "low": float(row[3]),
+                "close": float(row[4]),
+                "quote_volume": float(row[7]),
+                "trade_count": int(row[8]),
+                "taker_buy_quote_volume": float(row[10]),
+                "closed": int(row[6]) < current_ms,
+            }
+        )
+    return tuple(result)
+
+
+class MarketContextClient:
+    def __init__(self, timeout_seconds: float = 15.0, cache_size: int = 1000):
+        self.timeout_seconds = timeout_seconds
+        self.cache_size = cache_size
+        self._cache: dict[int, tuple[dict[str, Any], ...]] = {}
+
+    async def get(
+        self, signal_id: int, symbol: str
+    ) -> tuple[dict[str, Any], ...]:
+        cached = self._cache.get(signal_id)
+        if cached is not None:
+            return cached
+        params = {
+            "symbol": f"{normalize_symbol(symbol)}USDT",
+            "interval": "15m",
+            "limit": 8,
+        }
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            response = await client.get(BINANCE_FAPI_KLINES_URL, params=params)
+            response.raise_for_status()
+            context = parse_recent_15m_klines(response.json())
+        if len(self._cache) >= self.cache_size:
+            self._cache.pop(next(iter(self._cache)))
+        self._cache[signal_id] = context
+        return context
+
+
 class AIWriter:
     def __init__(self, config: AIConfig, tone: ToneConfig, max_chars: int):
         self.config = config
         self.tone = tone
-        self.max_chars = max_chars
+        self.max_chars = min(max_chars, config.max_chars)
 
     async def generate(self, signal: Mapping[str, Any], avoid_texts: tuple[str, ...] = ()) -> str:
-        messages = build_messages(signal, self.tone, self.max_chars)
+        messages = build_messages(
+            signal, self.tone, self.max_chars, concise=self.config.concise
+        )
         if avoid_texts:
             excerpts = "\n---\n".join(text[:600] for text in avoid_texts[-5:])
             messages[0]["content"] += (
@@ -534,6 +630,7 @@ class KOLPublisher:
         self.config = config
         self.store = SignalStore(config.publisher.database_path)
         self.accounts = {account.account_id: account for account in config.accounts if account.enabled}
+        self.market_context = MarketContextClient()
 
     async def notify_feishu(
         self,
@@ -590,12 +687,26 @@ class KOLPublisher:
                     else self.config.ai.temperature
                 ),
                 timeout_seconds=self.config.ai.timeout_seconds,
+                concise=(
+                    account.concise
+                    if account.concise is not None
+                    else self.config.ai.concise
+                ),
+                max_chars=(
+                    account.max_chars
+                    if account.max_chars is not None
+                    else self.config.ai.max_chars
+                ),
             )
             writer = AIWriter(ai_config, account.tone, self.config.publisher.max_post_chars)
             other_texts = self.store.generated_by_other_accounts(
                 int(delivery["signal_id"]), account.account_id
             )
-            text = await writer.generate(delivery, other_texts)
+            enriched_delivery = dict(delivery)
+            enriched_delivery["kline_context"] = await self.market_context.get(
+                int(delivery["signal_id"]), str(delivery["symbol"])
+            )
+            text = await writer.generate(enriched_delivery, other_texts)
             if text in other_texts:
                 raise RuntimeError("AI generated an exact duplicate of another account's post")
             if self.config.publisher.dry_run:

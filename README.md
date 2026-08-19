@@ -112,6 +112,8 @@ uv run python kol_publisher.py validate-accounts
 - `square_api_key`：该账号的 Square OpenAPI Key；
 - `tone`：独立的名字、人设、写作要求和附加提示；
 - `ai.model` / `ai.temperature`：覆盖全局模型参数；
+- `ai.concise`：是否使用简短回复，只保留结论和最关键依据；
+- `ai.max_chars`：AI 正文字数上限，可按账号覆盖全局设置；
 - `cooldown_seconds`：该账号对同币种同指标的冷却时间；
 - `posting_delay_seconds`：该账号收到信号后的随机错峰区间。
 
@@ -179,6 +181,11 @@ systemd path watcher 会自动重启对应服务加载新值。
 重复发布两个 `ACE + alpha_surge` 信号，但 `ACE + top_pump_energy` 仍可立即发布。
 不同账号互不占用彼此的冷却窗口。
 
+发布器在调用 AI 前会从 Binance 获取最近 8 根 15 分钟 K 线，约覆盖 2 小时，并把
+OHLC、成交额、成交笔数、主动买入成交额和是否收盘一并放入 AI 上下文。同一信号发给
+多个账号时共用缓存，只请求一次。K 线获取失败会让该 delivery 按现有退避策略重试，
+不会在缺少行情上下文时直接发布。
+
 目前的指标名如下：
 
 | 来源 | 指标名 | 默认方向 |
@@ -234,6 +241,20 @@ systemctl --user status alphapumphunter-kol-publisher.service
 systemctl --user status alphapumphunter-kol-sources.service
 journalctl --user -u alphapumphunter-kol-publisher.service -f
 journalctl --user -u alphapumphunter-kol-sources.service -f
+```
+
+临时停止服务（仍保留自动启动设置）：
+
+```bash
+systemctl --user stop alphapumphunter-kol-sources.service
+systemctl --user stop alphapumphunter-kol-publisher.service
+```
+
+停止服务并取消登录或重启后的自动启动：
+
+```bash
+systemctl --user disable --now alphapumphunter-kol-sources.service
+systemctl --user disable --now alphapumphunter-kol-publisher.service
 ```
 
 发布前可做一次 AI dry-run；它会消费一条待处理 delivery，但不会调用 Square：

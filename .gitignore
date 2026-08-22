@@ -29,3 +29,7 @@ logkol_*.py.log
 
 # Refreshed hourly by update_binance_contract_types.py
 binance_contract_types.json
+
+# Private proxy-pool demo inputs and generated Mihomo node credentials
+proxy_pool_demo.json
+proxy_pool_runtime/

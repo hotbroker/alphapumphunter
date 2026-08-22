@@ -30,5 +30,15 @@ systemctl --user disable --now mihomo-proxy-pool-refresh.timer
 systemctl --user disable --now mihomo-proxy-pool-refresh.path
 ```
 
+```
+#test in shell
+
+ for i in {1..8}; do
+    curl --noproxy '' -sS --max-time 15 \
+      -x http://127.0.0.1:7890 https://api.ipify.org
+    echo
+  done
+```
+
 The pool uses Mihomo `load-balance` with `round-robin`: each new proxy connection selects the next
 healthy node. HTTP clients that reuse a connection can retain its current exit IP until reconnect.

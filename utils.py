@@ -167,7 +167,7 @@ async def get_continuousKlines(symbol, interval='15m',limit=1000,contractType=No
     pair = normalize_usdt_pair(symbol)
     #contract_type = str(contractType).upper() if contractType else resolve_contract_type(pair)
     contractType1 = resolve_contract_type(pair)
-    contractType = contractType1 if contractType1 else contractType
+    contract_type = contractType1 if contractType1 else contractType
     # https://fapi.binance.com/fapi/v1/continuousKlines?interval=15m&limit=10&pair=PROMPTUSDT&contractType=PERPETUAL
     url = f'https://fapi.binance.com/fapi/v1/continuousKlines?interval={interval}&limit={limit}&pair={pair}&contractType={contract_type}'
     headers = {

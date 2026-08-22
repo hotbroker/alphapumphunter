@@ -7,6 +7,32 @@ selection for each new proxy connection.
 
 The subscription URL and generated node credentials are never stored in Git.
 
+For server deployment, use the one-command installer. It installs the official Mihomo binary
+for the current user, asks for the subscription URL only when the private URL file is absent,
+then enables the local proxy, hourly subscription refresh timer, and config-file watcher:
+
+```bash
+chmod +x install_proxy_pool.sh
+./install_proxy_pool.sh
+```
+
+The installer creates these user services:
+
+- `alphapumphunter-mihomo.service`: local `127.0.0.1:7890` proxy;
+- `alphapumphunter-proxy-pool-refresh.timer`: refreshes the subscription hourly;
+- `alphapumphunter-proxy-pool-refresh.path`: refreshes immediately after the private URL or
+  filter configuration changes.
+
+Service inspection and shutdown:
+
+```bash
+systemctl --user status alphapumphunter-mihomo.service
+journalctl --user -u alphapumphunter-mihomo.service -f
+systemctl --user disable --now alphapumphunter-mihomo.service
+systemctl --user disable --now alphapumphunter-proxy-pool-refresh.timer
+systemctl --user disable --now alphapumphunter-proxy-pool-refresh.path
+```
+
 ```bash
 install -d -m 700 ~/.config/alphapumphunter
 printf '%s\n' 'YOUR_SUBSCRIPTION_URL' > ~/.config/alphapumphunter/proxy_subscription_url.txt

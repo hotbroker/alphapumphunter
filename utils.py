@@ -1079,14 +1079,14 @@ async def get_web_oi_stats(symbol, period_minutes=5):
     symbol = symbol.upper()
     if not symbol.endswith('USDT'):
         symbol = f"{symbol}USDT"
-    url = 'https://www.usnbweb.mobi/bapi/futures/v1/public/future/data/open-interest-stats'
+    url = 'https://www.binance.com/bapi/futures/v1/public/future/data/open-interest-stats'
     headers = {
         'accept': '*/*',
         'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
         'clienttype': 'web',
         'content-type': 'application/json',
-        'origin': 'https://www.usnbweb.mobi',
-        'referer': f'https://www.usnbweb.mobi/zh-CN/futures/{symbol}',
+        'origin': 'https://www.binance.com',
+        'referer': f'https://www.binance.com/zh-CN/futures/{symbol}',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
     }
     payload = {

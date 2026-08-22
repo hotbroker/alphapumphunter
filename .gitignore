@@ -26,3 +26,6 @@ kol_monitor_volume_drops_state.json
 kol_monitor_hunter_state.json
 kol_pullback_consolidation_alert_history.json
 logkol_*.py.log
+
+# Refreshed hourly by update_binance_contract_types.py
+binance_contract_types.json

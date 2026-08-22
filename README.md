@@ -141,6 +141,23 @@ systemctl --user start alphapumphunter-kol-publisher.service
 该命令把任务标记为 `suppressed` 而非直接删行，避免仍在有效期内的信号被发布器重新建回
 待发布队列。只丢弃一个账号的积压可加 `--account baolao_01`。
 
+### 合约类型缓存
+
+`utils.get_continuousKlines` 会从项目目录的 `binance_contract_types.json` 按 `BTCUSDT`
+这类实际交易对读取 `contractType`，不再维护 TradFi 合约的硬编码列表。更新器每小时从
+`https://fapi.binance.com/fapi/v1/exchangeInfo` 刷新一次该文件，并使用原子替换写入，运行中
+的监控进程会在下次请求时自动读取新版本。
+
+安装器以 `--start` 启动时会一并启用更新服务。手动刷新或查看状态：
+
+```bash
+uv run python update_binance_contract_types.py --once
+systemctl --user status alphapumphunter-binance-contract-types.service
+```
+
+缓存不存在或没有该交易对时，K 线请求会临时回退为 `PERPETUAL` 并打印一次告警；更新器
+恢复后无需重启任何监控进程。可通过环境变量 `BINANCE_CONTRACT_TYPES_PATH` 使用其他缓存路径。
+
 ### 信号与代理配置
 
 KOL 信号参数位于 `~/.config/alphapumphunter/kol_sources.json`，示例见
@@ -256,8 +273,10 @@ uv run python kol_publisher.py run
 ```bash
 systemctl --user status alphapumphunter-kol-publisher.service
 systemctl --user status alphapumphunter-kol-sources.service
+systemctl --user status alphapumphunter-binance-contract-types.service
 journalctl --user -u alphapumphunter-kol-publisher.service -f
 journalctl --user -u alphapumphunter-kol-sources.service -f
+journalctl --user -u alphapumphunter-binance-contract-types.service -f
 ```
 
 临时停止服务（仍保留自动启动设置）：
@@ -265,6 +284,7 @@ journalctl --user -u alphapumphunter-kol-sources.service -f
 ```bash
 systemctl --user stop alphapumphunter-kol-sources.service
 systemctl --user stop alphapumphunter-kol-publisher.service
+systemctl --user stop alphapumphunter-binance-contract-types.service
 ```
 
 停止服务并取消登录或重启后的自动启动：
@@ -272,6 +292,7 @@ systemctl --user stop alphapumphunter-kol-publisher.service
 ```bash
 systemctl --user disable --now alphapumphunter-kol-sources.service
 systemctl --user disable --now alphapumphunter-kol-publisher.service
+systemctl --user disable --now alphapumphunter-binance-contract-types.service
 ```
 
 发布前可做一次 AI dry-run；它会消费一条待处理 delivery，但不会调用 Square：

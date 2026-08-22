@@ -10,6 +10,7 @@ import requests
 import threading
 from functools import wraps
 from typing import Deque, Dict, Iterable, List, MutableMapping, Optional, Set, Tuple
+from binance_contract_types import normalize_usdt_pair, resolve_contract_type
 feishu_myself = 'https://open.feishu.cn/open-apis/bot/v2/hook/a2d24754-47d4-4cdb-91b2-f2a11bae7ff9'
 feishu_alpha = 'https://open.feishu.cn/open-apis/bot/v2/hook/0e014c3c-3891-4b65-b869-9a5aae2b1828'
 #上架alpha通知研究
@@ -145,7 +146,7 @@ async def get_holders_cex(url) -> dict:
         return None
 
 
-async def get_continuousKlines(symbol, interval='15m',limit=1000,contractType='PERPETUAL'):
+async def get_continuousKlines(symbol, interval='15m',limit=1000,contractType=None):
     '''[
   [
     1607444700000,      	// Open time
@@ -163,14 +164,10 @@ async def get_continuousKlines(symbol, interval='15m',limit=1000,contractType='P
   ]
 ]
 '''
-    tradifi_contractType_list=['XAUUSDT','XAGUSDT','TSLAUSDT','XPTUSDT','XPDUSDT','INTCUSDT','HOODUSDT','MSTRUSDT','AMZNUSDT','CRCLUSDT' ,'COINUSDT'  ,'PLTRUSDT' ]
-
-    symbol = symbol.upper()
-    if symbol+'USDT' in tradifi_contractType_list:
-        print(f'get continuousKlines {symbol}USDT contractType TRADIFI_PERPETUAL')
-        contractType='TRADIFI_PERPETUAL'
-    #https://www.binance.com/fapi/v1/continuousKlines?interval=15m&limit=10&pair=PROMPTUSDT&contractType=PERPETUAL
-    url = f'https://www.binance.com/fapi/v1/continuousKlines?interval={interval}&limit={limit}&pair={symbol}USDT&contractType={contractType}'
+    pair = normalize_usdt_pair(symbol)
+    contract_type = str(contractType).upper() if contractType else resolve_contract_type(pair)
+    # https://fapi.binance.com/fapi/v1/continuousKlines?interval=15m&limit=10&pair=PROMPTUSDT&contractType=PERPETUAL
+    url = f'https://fapi.binance.com/fapi/v1/continuousKlines?interval={interval}&limit={limit}&pair={pair}&contractType={contract_type}'
     headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'Accept': 'application/json',
@@ -186,7 +183,7 @@ async def get_continuousKlines(symbol, interval='15m',limit=1000,contractType='P
 
             return js
     except Exception as e:
-        logger.opt(exception=True).warning(f"Failed to get_continuousKlines {symbol}: {e}")
+        logger.opt(exception=True).warning(f"Failed to get_continuousKlines {pair}: {e}")
         return None
 
 

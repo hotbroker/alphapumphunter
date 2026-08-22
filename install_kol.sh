@@ -111,6 +111,25 @@ PrivateTmp=true
 WantedBy=default.target
 EOF
 
+cat > "$unit_dir/alphapumphunter-binance-contract-types.service" <<EOF
+[Unit]
+Description=AlphaPumpHunter Binance contract type cache updater
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=$project_dir
+Environment=PYTHONUNBUFFERED=1
+ExecStart="$project_dir/.venv/bin/python" "$project_dir/update_binance_contract_types.py"
+Restart=always
+RestartSec=30
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
+EOF
+
 cat > "$unit_dir/alphapumphunter-kol-publisher-reload.service" <<EOF
 [Unit]
 Description=Reload AlphaPumpHunter KOL publisher configuration
@@ -159,6 +178,7 @@ systemctl --user enable --now \
     alphapumphunter-kol-sources-reload.path
 
 if [[ "$start_services" == "true" ]]; then
+    systemctl --user enable --now alphapumphunter-binance-contract-types.service
     echo "Validating enabled Binance Square accounts..."
     "$project_dir/.venv/bin/python" "$project_dir/kol_publisher.py" \
         --config "$publisher_config" validate-accounts

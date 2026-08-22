@@ -23,8 +23,8 @@
       "energy_level3_quote_volume": 15000000
     },
     "top_pump_energy": {
-      "interval_seconds": 45,
-      "candidate_limit": 50,
+      "interval_seconds": 120,
+      "candidate_limit": 20,
       "min_quote_volume_24h": 10000000,
       "min_change_24h_pct": 0.0,
       "source_cooldown_minutes": 5,
@@ -37,7 +37,7 @@
       "alert_min_recent_quote_volume": 4000000
     },
     "pullback_consolidation": {
-      "interval_seconds": 180,
+      "interval_seconds": 300,
       "min_quote_volume_24h": 50000000,
       "lookback_hours": 60,
       "consolidation_hours": 3,
@@ -49,7 +49,7 @@
       "min_pullback_pct": 20.0,
       "max_consolidation_range_pct": 18.0,
       "max_consolidation_close_drift_pct": 10.0,
-      "concurrency": 5,
+      "concurrency": 2,
       "source_cooldown_minutes": 60,
       "state_file": "kol_pullback_consolidation_alert_history.json"
     },
@@ -57,8 +57,8 @@
       "drop_threshold": 0.12,
       "min_quote_volume_24h": 30000000,
       "source_cooldown_seconds": 3600,
-      "check_interval_seconds": 10,
-      "per_symbol_delay_seconds": 0.15,
+      "check_interval_seconds": 30,
+      "per_symbol_delay_seconds": 0.5,
       "signal_file": "kol_triggered_signals.json",
       "state_file": "kol_monitor_volume_drops_state.json"
     },

@@ -77,6 +77,7 @@ class PublisherConfig:
     retry_base_seconds: int = 30
     max_attempts: int = 8
     max_signal_age_seconds: int = 3600
+    daily_post_limit_pause_seconds: int = 86400
     database_path: str = DEFAULT_DB_PATH
     dry_run: bool = False
     feishu_enabled: bool = False
@@ -95,6 +96,12 @@ class PublishResult:
     post_id: Optional[str]
     post_url: Optional[str]
     raw: Mapping[str, Any] = field(default_factory=dict)
+
+
+class SquareDailyPostLimitError(RuntimeError):
+    """Binance Square OpenAPI has reached its daily post allowance."""
+
+    code = "220009"
 
 
 def _secret(value: Any, env_name: str) -> str:
@@ -195,6 +202,9 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
             retry_base_seconds=int(publisher_data.get("retry_base_seconds", 30)),
             max_attempts=int(publisher_data.get("max_attempts", 8)),
             max_signal_age_seconds=int(publisher_data.get("max_signal_age_seconds", 3600)),
+            daily_post_limit_pause_seconds=int(
+                publisher_data.get("daily_post_limit_pause_seconds", 86400)
+            ),
             database_path=str(publisher_data.get("database_path") or DEFAULT_DB_PATH),
             dry_run=bool(publisher_data.get("dry_run", False)),
             feishu_enabled=bool(publisher_data.get("feishu_enabled", False)),
@@ -231,6 +241,8 @@ def validate_config(config: AppConfig, *, require_square_key: bool = True) -> No
             )
     if not 100 <= config.publisher.max_post_chars <= 2000:
         raise RuntimeError("publisher.max_post_chars must be between 100 and 2000")
+    if config.publisher.daily_post_limit_pause_seconds < 300:
+        raise RuntimeError("publisher.daily_post_limit_pause_seconds must be at least 300")
     if config.publisher.feishu_enabled and not config.publisher.feishu_webhook.startswith(
         "https://open.feishu.cn/open-apis/bot/"
     ):
@@ -425,6 +437,10 @@ class SquareClient:
             return PublishResult(None, None, {"publishStatus": "success_without_post_id"})
         response.raise_for_status()
         payload = response.json()
+        if str(payload.get("code")) == SquareDailyPostLimitError.code:
+            raise SquareDailyPostLimitError(
+                f"Square API [{payload.get('code')}]: {payload.get('message')}"
+            )
         if payload.get("code") != "000000":
             raise RuntimeError(f"Square API [{payload.get('code')}]: {payload.get('message')}")
         data = payload.get("data") or {}
@@ -496,6 +512,79 @@ class SignalStore:
                 "CREATE INDEX IF NOT EXISTS idx_deliveries_account_published "
                 "ON deliveries(account_id, published_at)"
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS account_publish_blocks (
+                    account_id TEXT PRIMARY KEY,
+                    reason TEXT NOT NULL,
+                    blocked_at REAL NOT NULL,
+                    blocked_until REAL NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_account_publish_blocks_until "
+                "ON account_publish_blocks(blocked_until)"
+            )
+
+    @staticmethod
+    def _blocked_account_ids(connection: sqlite3.Connection, current: float) -> set[str]:
+        connection.execute(
+            "DELETE FROM account_publish_blocks WHERE blocked_until <= ?", (current,)
+        )
+        rows = connection.execute(
+            "SELECT account_id FROM account_publish_blocks WHERE blocked_until > ?",
+            (current,),
+        ).fetchall()
+        return {str(row["account_id"]) for row in rows}
+
+    def blocked_account_ids(self, now: Optional[float] = None) -> set[str]:
+        current = time.time() if now is None else now
+        with connect(self.path) as connection:
+            return self._blocked_account_ids(connection, current)
+
+    def block_account_for_daily_post_limit(
+        self, account_id: str, pause_seconds: int, error: Exception
+    ) -> tuple[float, int]:
+        now = time.time()
+        blocked_until = now + pause_seconds
+        reason = str(error)[:1000]
+        with connect(self.path) as connection:
+            connection.execute(
+                """
+                INSERT INTO account_publish_blocks (
+                    account_id, reason, blocked_at, blocked_until
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(account_id) DO UPDATE SET
+                    reason=excluded.reason,
+                    blocked_at=excluded.blocked_at,
+                    blocked_until=excluded.blocked_until
+                """,
+                (account_id, reason, now, blocked_until),
+            )
+            cursor = connection.execute(
+                "UPDATE deliveries SET status='suppressed', error=?, claimed_at=NULL "
+                "WHERE account_id=? AND status IN ('pending','processing')",
+                (f"daily post limit: {reason}", account_id),
+            )
+        return blocked_until, cursor.rowcount
+
+    def discard_pending(self, account_id: Optional[str] = None) -> int:
+        reason = "manual backlog discard"
+        with connect(self.path) as connection:
+            if account_id:
+                cursor = connection.execute(
+                    "UPDATE deliveries SET status='suppressed', error=?, claimed_at=NULL "
+                    "WHERE account_id=? AND status IN ('pending','processing')",
+                    (reason, account_id),
+                )
+            else:
+                cursor = connection.execute(
+                    "UPDATE deliveries SET status='suppressed', error=?, claimed_at=NULL "
+                    "WHERE status IN ('pending','processing')",
+                    (reason,),
+                )
+        return cursor.rowcount
 
     def sync_deliveries(
         self, accounts: tuple[AccountConfig, ...], max_signal_age_seconds: int
@@ -506,15 +595,19 @@ class SignalStore:
                 "SELECT id, created_at FROM signals WHERE created_at >= ?",
                 (now - max_signal_age_seconds,),
             ).fetchall()
-            enabled_accounts = tuple(account for account in accounts if account.enabled)
-            enabled_ids = tuple(account.account_id for account in enabled_accounts)
-            if enabled_ids:
-                placeholders = ",".join("?" for _ in enabled_ids)
+            configured_accounts = tuple(account for account in accounts if account.enabled)
+            configured_ids = tuple(account.account_id for account in configured_accounts)
+            if configured_ids:
+                placeholders = ",".join("?" for _ in configured_ids)
                 connection.execute(
                     f"UPDATE deliveries SET status='cancelled', claimed_at=NULL "
                     f"WHERE status IN ('pending','processing') AND account_id NOT IN ({placeholders})",
-                    enabled_ids,
+                    configured_ids,
                 )
+            blocked_ids = self._blocked_account_ids(connection, now)
+            enabled_accounts = tuple(
+                account for account in configured_accounts if account.account_id not in blocked_ids
+            )
             for signal in signal_rows:
                 for account in enabled_accounts:
                     delay = random.uniform(account.min_delay_seconds, account.max_delay_seconds)
@@ -657,6 +750,34 @@ class KOLPublisher:
             response = await client.post(publisher.feishu_webhook, json=payload)
             response.raise_for_status()
 
+    async def notify_daily_post_limit(
+        self, account: AccountConfig, error: SquareDailyPostLimitError, blocked_until: float
+    ) -> None:
+        publisher = self.config.publisher
+        if not publisher.feishu_enabled or not publisher.feishu_webhook:
+            return
+        resume_at = datetime.fromtimestamp(blocked_until, timezone.utc).isoformat(
+            timespec="minutes"
+        )
+        payload = {
+            "msg_type": "text",
+            "content": {
+                "text": "\n".join(
+                    (
+                        "币安广场 KOL 发布已暂停",
+                        f"账号：{account.account_id}",
+                        "原因：Binance Square OpenAPI 达到每日发帖限制（220009）",
+                        f"恢复时间（UTC）：{resume_at}",
+                        f"接口信息：{error}",
+                        "该账号现有待发布任务已抑制，不会继续累积或重试。",
+                    )
+                )
+            },
+        }
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(publisher.feishu_webhook, json=payload)
+            response.raise_for_status()
+
     async def process_one(self) -> bool:
         self.store.sync_deliveries(
             self.config.accounts, self.config.publisher.max_signal_age_seconds
@@ -733,6 +854,24 @@ class KOLPublisher:
                         "Square post succeeded, but Feishu notification failed for delivery {}",
                         delivery["delivery_id"],
                     )
+        except SquareDailyPostLimitError as exc:
+            blocked_until, suppressed_count = self.store.block_account_for_daily_post_limit(
+                account.account_id,
+                self.config.publisher.daily_post_limit_pause_seconds,
+                exc,
+            )
+            logger.warning(
+                "Square daily post limit reached for account {}; paused until {} and suppressed {} delivery(s)",
+                account.account_id,
+                datetime.fromtimestamp(blocked_until, timezone.utc).isoformat(timespec="minutes"),
+                suppressed_count,
+            )
+            try:
+                await self.notify_daily_post_limit(account, exc, blocked_until)
+            except Exception:
+                logger.exception(
+                    "Unable to send Feishu daily-limit alert for account {}", account.account_id
+                )
         except Exception as exc:
             self.store.mark_failed(delivery, exc, self.config.publisher)
             logger.exception(
@@ -760,6 +899,10 @@ def build_parser() -> argparse.ArgumentParser:
     test = sub.add_parser("test-signal", help="Queue a synthetic signal for end-to-end validation")
     test.add_argument("symbol")
     test.add_argument("--direction", choices=["LONG", "SHORT", "WATCH"], default="LONG")
+    discard = sub.add_parser(
+        "discard-pending", help="Discard queued deliveries without allowing them to be recreated"
+    )
+    discard.add_argument("--account", help="Only discard one Binance Square account's queue")
     sub.add_parser("validate-accounts", help="Validate all enabled Square keys without posting")
     return parser
 
@@ -780,6 +923,11 @@ async def async_main() -> None:
                 continue
             await SquareClient(account.square_api_key).validate_key()
             logger.info("Square key is valid for account {}", account.account_id)
+        return
+    if args.command == "discard-pending":
+        discarded = SignalStore(config.publisher.database_path).discard_pending(args.account)
+        scope = f"account {args.account}" if args.account else "all accounts"
+        logger.info("Discarded {} queued delivery(s) for {}", discarded, scope)
         return
     if args.command == "test-signal":
         signal_id = emit_signal(

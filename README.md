@@ -124,6 +124,23 @@ uv run python kol_publisher.py validate-accounts
 `publisher.feishu_enabled` 控制发布成功通知，`publisher.feishu_webhook` 配置目标机器人。
 只有 Square 帖子成功并写入数据库后才会通知飞书；飞书失败不会重试 Square。
 
+当 Binance Square OpenAPI 返回 `220009`（每日发帖限制）时，发布器会向已配置的飞书
+webhook 发送告警，暂停对应账号，并把该账号所有 `pending` / `processing` 任务标为
+`suppressed`。暂停账号不会再创建新的待发布任务，其他账号不受影响。默认暂停
+`publisher.daily_post_limit_pause_seconds: 86400` 秒；暂停到期后会自动恢复创建新任务。
+该值是本地保护时长，若确认 Binance 的额度重置周期不同，可在 `kol_config.json` 调整。
+
+手动丢弃现有积压时，先停止发布器，再执行：
+
+```bash
+systemctl --user stop alphapumphunter-kol-publisher.service
+uv run python kol_publisher.py discard-pending
+systemctl --user start alphapumphunter-kol-publisher.service
+```
+
+该命令把任务标记为 `suppressed` 而非直接删行，避免仍在有效期内的信号被发布器重新建回
+待发布队列。只丢弃一个账号的积压可加 `--account baolao_01`。
+
 ### 信号与代理配置
 
 KOL 信号参数位于 `~/.config/alphapumphunter/kol_sources.json`，示例见

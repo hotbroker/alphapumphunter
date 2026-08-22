@@ -1,0 +1,12 @@
+{
+  "subscription_url_file": "~/.config/mihomo-proxy-pool/subscription_url.txt",
+  "output_path": "~/.config/mihomo-proxy-pool/runtime/mihomo.json",
+  "exclude_name_patterns": [
+    "(?i)(?:^|[^A-Z])(?:US|USA)(?:$|[^A-Z])",
+    "(?i)united[ _-]*states|america",
+    "美国|🇺🇸"
+  ],
+  "listen_port": 7890,
+  "health_check_url": "https://www.gstatic.com/generate_204",
+  "health_check_interval_seconds": 300
+}

@@ -414,7 +414,8 @@ def save_alert_history(path: Path, history: dict[str, dict[str, Any]]) -> None:
 def should_notify(pattern: Pattern, history: dict[str, dict[str, Any]], cooldown_seconds: int) -> bool:
     previous = history.get(pattern.symbol, {})
     previous_time = _to_float(previous.get("alert_time"))
-    if previous.get("fingerprint") == pattern.fingerprint and time.time() - previous_time < cooldown_seconds:
+    #if previous.get("fingerprint") == pattern.fingerprint and time.time() - previous_time < cooldown_seconds:
+    if time.time() - previous_time < cooldown_seconds:
         return False
     return True
 

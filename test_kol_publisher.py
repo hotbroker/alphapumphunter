@@ -14,6 +14,7 @@ from kol_publisher import (
     MarketContextClient,
     OkxAuthorizationError,
     OkxClient,
+    OkxSwapCatalog,
     PublishResult,
     PublisherConfig,
     SignalStore,
@@ -416,6 +417,56 @@ class SquareClientTests(unittest.IsolatedAsyncioTestCase):
         with mock.patch("kol_publisher.httpx.AsyncClient", return_value=client_context):
             with self.assertRaisesRegex(SquareDailyPostLimitError, "220009"):
                 await SquareClient("square-key").publish("$ACE 看多")
+
+
+class OkxSwapCatalogTests(unittest.IsolatedAsyncioTestCase):
+    async def test_has_usdt_swap_uses_cached_live_instruments(self):
+        catalog = OkxSwapCatalog(refresh_seconds=3600)
+        catalog._live_usdt_swaps = {"BTC-USDT-SWAP", "ETH-USDT-SWAP"}
+        catalog._loaded_at = time.time()
+        self.assertTrue(await catalog.has_usdt_swap("btc"))
+        self.assertFalse(await catalog.has_usdt_swap("movr"))
+
+    async def test_okx_delivery_without_swap_is_suppressed_before_ai(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = str(Path(directory) / "signals.db")
+            emit_signal(
+                symbol="MOVR",
+                source="test",
+                indicator="alpha_surge",
+                direction="LONG",
+                summary="测试",
+                db_path=db_path,
+            )
+            account = AccountConfig(
+                account_id="okx-one",
+                platform="okx",
+                okx_authorization="jwt-token",
+                okx_devid="99651120-8671-451b-8c34-172f6d649721",
+                tone=ToneConfig(),
+            )
+            config = AppConfig(
+                ai=AIConfig("https://example.com/v1", "ai-key", "deepseek-v4-flash"),
+                accounts=(account,),
+                publisher=PublisherConfig(database_path=db_path),
+            )
+            publisher = KOLPublisher(config)
+            with (
+                mock.patch.object(
+                    publisher.okx_swap_catalog,
+                    "has_usdt_swap",
+                    mock.AsyncMock(return_value=False),
+                ),
+                mock.patch.object(AIWriter, "generate", mock.AsyncMock()) as generate,
+            ):
+                self.assertTrue(await publisher.process_one())
+            with connect(db_path) as connection:
+                row = connection.execute(
+                    "SELECT status, error FROM deliveries"
+                ).fetchone()
+            self.assertEqual(row["status"], "suppressed")
+            self.assertIn("MOVR-USDT-SWAP", row["error"])
+            generate.assert_not_awaited()
 
 
 class OkxClientTests(unittest.IsolatedAsyncioTestCase):

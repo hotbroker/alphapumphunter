@@ -30,6 +30,7 @@ SQUARE_POST_URL = (
     "https://www.binance.com/bapi/composite/v1/public/pgc/openApi/content/add"
 )
 OKX_PUBLISH_URL = "https://www.okx.com/priapi/v5/content/ugc/publish"
+OKX_INSTRUMENTS_URL = "https://www.okx.com/api/v5/public/instruments"
 BINANCE_FAPI_KLINES_URL = "https://www.binance.com/fapi/v1/klines"
 VALID_PLATFORMS = frozenset({"binance", "okx"})
 PlatformName = Literal["binance", "okx"]
@@ -601,6 +602,54 @@ class MarketContextClient:
         return context
 
 
+class OkxSwapCatalog:
+    """Cache live OKX USDT-margined perpetual contracts for pre-publish filtering."""
+
+    def __init__(
+        self,
+        timeout_seconds: float = 15.0,
+        refresh_seconds: float = 3600.0,
+    ):
+        self.timeout_seconds = timeout_seconds
+        self.refresh_seconds = refresh_seconds
+        self._live_usdt_swaps: set[str] = set()
+        self._loaded_at = 0.0
+        self._lock = asyncio.Lock()
+
+    @staticmethod
+    def inst_id(symbol: str) -> str:
+        return f"{normalize_symbol(symbol)}-USDT-SWAP"
+
+    async def refresh(self) -> None:
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            response = await client.get(
+                OKX_INSTRUMENTS_URL, params={"instType": "SWAP"}
+            )
+            response.raise_for_status()
+            payload = response.json()
+        if str(payload.get("code")) != "0":
+            message = payload.get("msg") or payload.get("message") or payload
+            raise RuntimeError(f"OKX instruments API [{payload.get('code')}]: {message}")
+        live = {
+            str(item["instId"])
+            for item in (payload.get("data") or [])
+            if isinstance(item, dict)
+            and str(item.get("instId", "")).endswith("-USDT-SWAP")
+            and str(item.get("state", "")).lower() == "live"
+        }
+        self._live_usdt_swaps = live
+        self._loaded_at = time.time()
+        logger.info("Loaded {} live OKX USDT-SWAP instruments", len(live))
+
+    async def has_usdt_swap(self, symbol: str) -> bool:
+        async with self._lock:
+            if not self._live_usdt_swaps or (
+                time.time() - self._loaded_at >= self.refresh_seconds
+            ):
+                await self.refresh()
+            return self.inst_id(symbol) in self._live_usdt_swaps
+
+
 class AIWriter:
     def __init__(
         self,
@@ -1036,10 +1085,16 @@ class SignalStore:
         return tuple(str(row["generated_text"]) for row in rows)
 
     def mark_suppressed(self, delivery_id: int, prior_id: int) -> None:
+        self.suppress_delivery(
+            delivery_id,
+            f"cooldown: same account, symbol, and indicator as delivery {prior_id}",
+        )
+
+    def suppress_delivery(self, delivery_id: int, reason: str) -> None:
         with connect(self.path) as connection:
             connection.execute(
                 "UPDATE deliveries SET status='suppressed', error=?, claimed_at=NULL WHERE id=?",
-                (f"cooldown: same account, symbol, and indicator as delivery {prior_id}", delivery_id),
+                (reason[:1000], delivery_id),
             )
 
     def mark_published(self, delivery_id: int, text: str, result: PublishResult, *, dry_run: bool) -> None:
@@ -1080,6 +1135,7 @@ class KOLPublisher:
         self.store = SignalStore(config.publisher.database_path)
         self.accounts = {account.account_id: account for account in config.accounts if account.enabled}
         self.market_context = MarketContextClient()
+        self.okx_swap_catalog = OkxSwapCatalog()
 
     async def notify_feishu(
         self,
@@ -1187,6 +1243,20 @@ class KOLPublisher:
                 delivery["delivery_id"], account.account_id, delivery["symbol"], delivery["indicator"],
             )
             return True
+        if account.platform == "okx":
+            if not await self.okx_swap_catalog.has_usdt_swap(str(delivery["symbol"])):
+                inst = OkxSwapCatalog.inst_id(str(delivery["symbol"]))
+                self.store.suppress_delivery(
+                    int(delivery["delivery_id"]),
+                    f"okx: no live USDT-SWAP contract ({inst})",
+                )
+                logger.info(
+                    "Suppressed OKX delivery {} for account {}: {} has no live OKX USDT-SWAP",
+                    delivery["delivery_id"],
+                    account.account_id,
+                    delivery["symbol"],
+                )
+                return True
         try:
             ai_config = AIConfig(
                 base_url=self.config.ai.base_url,

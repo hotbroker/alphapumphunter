@@ -103,7 +103,9 @@ Square OpenAPI Key 可在 Binance Square Creator Center 创建。账号 ID 为 `
 时，对应环境变量名是 `BINANCE_SQUARE_OPENAPI_KEY_BAOLAO_01`。
 
 OKX 星球账号需设置 `platform: "okx"`，并提供浏览器抓包得到的 `authorization`（JWT）
-和 `devid`。每次发帖都会自动生成新的 `publishId`（UUID）。OKX 文案会单独再跑一遍 AI，
+和 `devid`。每次发帖都会自动生成新的 `publishId`（UUID）。发布前会查询 OKX
+公开接口，仅当该币种存在 live 状态的 `SYMBOL-USDT-SWAP` 永续合约时才发 OKX；
+像 MOVR 这类 OKX 未上线的币会自动跳过，币安账号不受影响。OKX 文案会单独再跑一遍 AI，
 并参考同一信号在其他平台/账号已生成的正文做避重，避免和币安广场发一模一样的内容。
 
 可用空正文校验所有启用账号的 Key，不会创建帖子：

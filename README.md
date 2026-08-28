@@ -78,13 +78,13 @@ Uptime Kuma 常驻进程监管与异步健康上报说明见 `UPTIME_KUMA.md`。
 
 ---
 
-## Binance Square 多账号 KOL
+## Binance Square / OKX 星球 多账号 KOL
 
 原始 `main.py`、`toppump.py`、`binance_pullback_consolidation_monitor.py`、
 `instant_opportunity_hunter.py` 和 `binance_monitor_volume_drops.py` 保持保守逻辑，
 不会写 KOL 队列。对应的 `kol_*.py` 是完全隔离的激进副本，只检测信号和写入
 `kol_signals.db`，不包含自动下单或直接飞书推送。`kol_publisher.py` 为每个账号分别
-生成文案，再通过 Binance Square 官方 OpenAPI 发布。
+生成文案，再通过 Binance Square 官方 OpenAPI 或 OKX 星球 Web API 发布。
 
 ### 账号与通知配置
 
@@ -95,10 +95,16 @@ Uptime Kuma 常驻进程监管与异步健康上报说明见 `UPTIME_KUMA.md`。
 ```bash
 export KOL_AI_API_KEY='...'
 export BINANCE_SQUARE_OPENAPI_KEY_BAOLAO_01='...'
+export OKX_AUTHORIZATION_OKX_ORBIT_01='...'
+export OKX_DEVID_OKX_ORBIT_01='...'
 ```
 
 Square OpenAPI Key 可在 Binance Square Creator Center 创建。账号 ID 为 `baolao_01`
 时，对应环境变量名是 `BINANCE_SQUARE_OPENAPI_KEY_BAOLAO_01`。
+
+OKX 星球账号需设置 `platform: "okx"`，并提供浏览器抓包得到的 `authorization`（JWT）
+和 `devid`。每次发帖都会自动生成新的 `publishId`（UUID）。OKX 文案会单独再跑一遍 AI，
+并参考同一信号在其他平台/账号已生成的正文做避重，避免和币安广场发一模一样的内容。
 
 可用空正文校验所有启用账号的 Key，不会创建帖子：
 
@@ -108,8 +114,11 @@ uv run python kol_publisher.py validate-accounts
 
 在 `accounts` 数组中可添加任意数量账号。每个账号支持独立设置：
 
+- `platform`：`binance`（默认）或 `okx`；
 - `enabled`：是否参与分发；
-- `square_api_key`：该账号的 Square OpenAPI Key；
+- `square_api_key`：Binance Square OpenAPI Key（`platform=binance` 时必填）；
+- `authorization` / `devid`：OKX 星球凭证（`platform=okx` 时必填）；
+- `okx_group`：OKX 发帖分组，默认 `USDT`；
 - `tone`：独立的名字、人设、写作要求和附加提示；
 - `ai.model` / `ai.temperature`：覆盖全局模型参数；
 - `ai.concise`：是否使用简短回复，只保留结论和最关键依据；
@@ -118,11 +127,16 @@ uv run python kol_publisher.py validate-accounts
 - `posting_delay_seconds`：该账号收到信号后的随机错峰区间。
 
 同一信号会为每个启用账号创建独立 delivery，并分别调用 AI。后生成的账号会看到前面
-账号的文案作为避重样本，完全相同的正文不会发布。新增账号只接收最近
+账号的文案作为避重样本，完全相同的正文不会发布。OKX 账号会使用独立的 Orbit 提示词，
+并在已有币安文案时强制改写。新增账号只接收最近
 `max_signal_age_seconds` 内的信号，不会补发很久以前的历史告警。
 
 `publisher.feishu_enabled` 控制发布成功通知，`publisher.feishu_webhook` 配置目标机器人。
-只有 Square 帖子成功并写入数据库后才会通知飞书；飞书失败不会重试 Square。
+只有帖子成功并写入数据库后才会通知飞书；飞书失败不会重试发帖。
+
+当 OKX 账号的 `authorization` 无效或过期时，发布器会向飞书 webhook 发送告警，
+暂停对应账号，并把该账号所有 `pending` / `processing` 任务标为 `suppressed`。
+更新 `kol_config.json` 中的凭证并保存后，path watcher 会重启发布器。
 
 当 Binance Square OpenAPI 返回 `220009`（每日发帖限制）时，发布器会向已配置的飞书
 webhook 发送告警，暂停对应账号，并把该账号所有 `pending` / `processing` 任务标为

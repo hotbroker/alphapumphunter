@@ -12,12 +12,17 @@ from kol_publisher import (
     AIWriter,
     KOLPublisher,
     MarketContextClient,
+    OkxAuthorizationError,
+    OkxClient,
     PublishResult,
     PublisherConfig,
     SignalStore,
     SquareClient,
     SquareDailyPostLimitError,
     ToneConfig,
+    _extract_assistant_text,
+    _normalize_chat_completion_response,
+    extract_assistant_text_from_chat_response,
     build_messages,
     clean_generated_text,
     load_config,
@@ -47,7 +52,15 @@ class KOLSignalTests(unittest.TestCase):
             db_path=self.db_path,
         )
 
-    def account(self, account_id="one"):
+    def account(self, account_id="one", platform="binance"):
+        if platform == "okx":
+            return AccountConfig(
+                account_id=account_id,
+                platform="okx",
+                okx_authorization="jwt-token",
+                okx_devid="99651120-8671-451b-8c34-172f6d649721",
+                tone=ToneConfig(),
+            )
         return AccountConfig(
             account_id=account_id,
             square_api_key="test",
@@ -236,13 +249,45 @@ class KOLCopyTests(unittest.TestCase):
         self.assertTrue(config.ai.concise)
         self.assertEqual(config.ai.max_chars, 300)
         self.assertEqual(config.publisher.daily_post_limit_pause_seconds, 86400)
-        self.assertEqual(len(config.accounts), 2)
+        self.assertEqual(len(config.accounts), 3)
         self.assertEqual(config.accounts[0].account_id, "baolao_01")
+        self.assertEqual(config.accounts[0].platform, "binance")
         self.assertTrue(config.accounts[0].enabled)
         self.assertFalse(config.accounts[1].enabled)
+        self.assertEqual(config.accounts[2].platform, "okx")
+        self.assertEqual(config.accounts[2].okx_group, "USDT")
         self.assertNotEqual(config.accounts[0].tone.name, config.accounts[1].tone.name)
         self.assertEqual(config.accounts[0].max_chars, 260)
         self.assertFalse(config.accounts[1].concise)
+
+    def test_okx_prompt_differs_from_binance(self):
+        signal = {
+            "symbol": "ACE",
+            "source": "main.py",
+            "indicator": "alpha_surge",
+            "direction": "LONG",
+            "summary": "10分钟涨幅12%",
+            "price": 0.5,
+            "details_json": json.dumps({"change_pct": 12}),
+            "kline_context": [],
+        }
+        binance = build_messages(signal, ToneConfig(), 300, platform="binance")[0]["content"]
+        okx = build_messages(signal, ToneConfig(), 300, platform="okx")[0]["content"]
+        self.assertIn("币安广场", binance)
+        self.assertIn("OKX 星球", okx)
+        self.assertIn("$ACE", binance)
+        self.assertNotIn("$ACE", okx)
+
+    def test_okx_cleaner_does_not_force_cashtag(self):
+        text = clean_generated_text(
+            "ACE 这波量能起来了，短线看多",
+            symbol="ACE",
+            direction="LONG",
+            max_chars=120,
+            platform="okx",
+        )
+        self.assertIn("ACE", text)
+        self.assertNotIn("$ACE", text)
 
     def test_ai_writer_uses_ai_character_limit_below_platform_limit(self):
         writer = AIWriter(
@@ -257,6 +302,68 @@ class KOLCopyTests(unittest.TestCase):
             1200,
         )
         self.assertEqual(writer.max_chars, 180)
+
+    def test_normalize_gateway_wrapped_chat_completion(self):
+        wrapped = {
+            "success": True,
+            "data": {
+                "choices": [
+                    {"message": {"role": "assistant", "content": "$ACE 看多"}}
+                ]
+            },
+        }
+        self.assertEqual(
+            extract_assistant_text_from_chat_response(wrapped),
+            "$ACE 看多",
+        )
+
+    def test_extracts_openai_compatible_chat_completion(self):
+        payload = {
+            "id": "chatcmpl-test",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "$BTC 看多，量能起来了"},
+                    "finish_reason": "stop",
+                }
+            ],
+        }
+        self.assertEqual(
+            extract_assistant_text_from_chat_response(payload),
+            "$BTC 看多，量能起来了",
+        )
+
+    def test_extracts_multimodal_content_parts(self):
+        payload = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            {"type": "text", "text": "$ACE 看多"},
+                            {"type": "text", "text": "短线关注"},
+                        ],
+                    }
+                }
+            ]
+        }
+        self.assertEqual(
+            extract_assistant_text_from_chat_response(payload),
+            "$ACE 看多\n短线关注",
+        )
+
+    def test_extracts_legacy_completion_text_field(self):
+        payload = {"choices": [{"text": "$ACE 看多，老格式 completion"}]}
+        self.assertEqual(
+            extract_assistant_text_from_chat_response(payload),
+            "$ACE 看多，老格式 completion",
+        )
+
+    def test_gateway_error_is_not_treated_as_empty_content(self):
+        with self.assertRaisesRegex(RuntimeError, "AI gateway error"):
+            extract_assistant_text_from_chat_response(
+                {"success": False, "msg": "model unavailable"}
+            )
 
 
 class KOLMarketContextTests(unittest.IsolatedAsyncioTestCase):
@@ -309,6 +416,41 @@ class SquareClientTests(unittest.IsolatedAsyncioTestCase):
         with mock.patch("kol_publisher.httpx.AsyncClient", return_value=client_context):
             with self.assertRaisesRegex(SquareDailyPostLimitError, "220009"):
                 await SquareClient("square-key").publish("$ACE 看多")
+
+
+class OkxClientTests(unittest.IsolatedAsyncioTestCase):
+    async def test_publish_generates_fresh_publish_id_each_time(self):
+        response = mock.Mock()
+        response.json.return_value = {"code": "0", "data": {"id": "123"}}
+        client = mock.AsyncMock()
+        client.post.return_value = response
+        client_context = mock.MagicMock()
+        client_context.__aenter__ = mock.AsyncMock(return_value=client)
+        client_context.__aexit__ = mock.AsyncMock(return_value=False)
+        okx = OkxClient("jwt", "99651120-8671-451b-8c34-172f6d649721")
+        with mock.patch("kol_publisher.httpx.AsyncClient", return_value=client_context):
+            first = await okx.publish("ACE 看多")
+            second = await okx.publish("ACE 看多")
+        first_id = first.raw["publishId"]
+        second_id = second.raw["publishId"]
+        self.assertNotEqual(first_id, second_id)
+        payloads = [call.kwargs["json"] for call in client.post.await_args_list]
+        self.assertEqual(payloads[0]["publishId"], first_id)
+        self.assertEqual(payloads[1]["publishId"], second_id)
+        self.assertEqual(payloads[0]["group"], "USDT")
+
+    async def test_auth_error_response_raises_authorization_error(self):
+        response = mock.Mock()
+        response.status_code = 401
+        response.json.return_value = {"code": "50113", "msg": "token expired"}
+        client = mock.AsyncMock()
+        client.post.return_value = response
+        client_context = mock.MagicMock()
+        client_context.__aenter__ = mock.AsyncMock(return_value=client)
+        client_context.__aexit__ = mock.AsyncMock(return_value=False)
+        with mock.patch("kol_publisher.httpx.AsyncClient", return_value=client_context):
+            with self.assertRaises(OkxAuthorizationError):
+                await OkxClient("jwt", "devid").publish("ACE 看多")
 
 
 class KOLPublishFailureIsolationTests(unittest.IsolatedAsyncioTestCase):
@@ -388,6 +530,68 @@ class KOLPublishFailureIsolationTests(unittest.IsolatedAsyncioTestCase):
                     "SELECT COUNT(*) AS count FROM deliveries WHERE status='pending'"
                 ).fetchone()
             self.assertEqual(pending["count"], 0)
+
+    async def test_okx_auth_failure_pauses_account_and_notifies_feishu(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = str(Path(directory) / "signals.db")
+            emit_signal(
+                symbol="ACE",
+                source="test",
+                indicator="alpha_surge",
+                direction="LONG",
+                summary="测试",
+                db_path=db_path,
+            )
+            account = AccountConfig(
+                account_id="okx-one",
+                platform="okx",
+                okx_authorization="jwt-token",
+                okx_devid="99651120-8671-451b-8c34-172f6d649721",
+                tone=ToneConfig(),
+            )
+            config = AppConfig(
+                ai=AIConfig("https://example.com/v1", "ai-key", "gpt-5.6-luna"),
+                accounts=(account,),
+                publisher=PublisherConfig(
+                    database_path=db_path,
+                    feishu_enabled=True,
+                    feishu_webhook="https://open.feishu.cn/open-apis/bot/v2/hook/test",
+                ),
+            )
+            publisher = KOLPublisher(config)
+            with (
+                mock.patch.object(AIWriter, "generate", mock.AsyncMock(return_value="ACE 看多")),
+                mock.patch.object(
+                    publisher.market_context,
+                    "get",
+                    mock.AsyncMock(return_value=()),
+                ),
+                mock.patch.object(
+                    OkxClient,
+                    "publish",
+                    mock.AsyncMock(
+                        side_effect=OkxAuthorizationError(
+                            "OKX authorization invalid: [50113] token expired"
+                        )
+                    ),
+                ),
+                mock.patch.object(
+                    publisher, "notify_okx_authorization_error", mock.AsyncMock()
+                ) as notify_auth,
+            ):
+                self.assertTrue(await publisher.process_one())
+
+            with connect(db_path) as connection:
+                delivery_status = connection.execute(
+                    "SELECT status FROM deliveries"
+                ).fetchone()
+                account_block = connection.execute(
+                    "SELECT account_id, blocked_until FROM account_publish_blocks"
+                ).fetchone()
+            self.assertEqual(delivery_status["status"], "suppressed")
+            self.assertEqual(account_block["account_id"], "okx-one")
+            self.assertGreater(account_block["blocked_until"], time.time())
+            notify_auth.assert_awaited_once()
 
     async def test_feishu_failure_does_not_retry_successful_square_post(self):
         with tempfile.TemporaryDirectory() as directory:

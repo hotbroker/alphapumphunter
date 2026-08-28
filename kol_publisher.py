@@ -1,4 +1,4 @@
-"""Generate signal-driven KOL copy and publish it to Binance Square."""
+"""Generate signal-driven KOL copy and publish to Binance Square and OKX Orbit."""
 
 from __future__ import annotations
 
@@ -10,10 +10,11 @@ import random
 import re
 import sqlite3
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Literal, Mapping, Optional
 
 import httpx
 from loguru import logger
@@ -28,7 +29,10 @@ DEFAULT_CONFIG_PATH = os.getenv("KOL_CONFIG_PATH") or (
 SQUARE_POST_URL = (
     "https://www.binance.com/bapi/composite/v1/public/pgc/openApi/content/add"
 )
+OKX_PUBLISH_URL = "https://www.okx.com/priapi/v5/content/ugc/publish"
 BINANCE_FAPI_KLINES_URL = "https://www.binance.com/fapi/v1/klines"
+VALID_PLATFORMS = frozenset({"binance", "okx"})
+PlatformName = Literal["binance", "okx"]
 
 
 @dataclass(frozen=True)
@@ -58,8 +62,12 @@ class ToneConfig:
 @dataclass(frozen=True)
 class AccountConfig:
     account_id: str
-    square_api_key: str
     tone: ToneConfig
+    platform: PlatformName = "binance"
+    square_api_key: str = ""
+    okx_authorization: str = ""
+    okx_devid: str = ""
+    okx_group: str = "USDT"
     enabled: bool = True
     model: Optional[str] = None
     temperature: Optional[float] = None
@@ -104,6 +112,57 @@ class SquareDailyPostLimitError(RuntimeError):
     code = "220009"
 
 
+class OkxAuthorizationError(RuntimeError):
+    """OKX Orbit authorization token is invalid or expired."""
+
+
+_OKX_AUTH_MESSAGE_HINTS = (
+    "unauthorized",
+    "unauthoriz",
+    "token expired",
+    "jwt expired",
+    "login expired",
+    "not logged",
+    "not login",
+    "please login",
+    "authorization",
+    "invalid token",
+    "token invalid",
+    "credential",
+    "请登录",
+    "登录过期",
+    "未登录",
+    "token失效",
+    "token无效",
+    "授权",
+    "过期",
+)
+
+
+def _okx_error_message(body: Mapping[str, Any], *, status_code: Optional[int] = None) -> str:
+    message = str(body.get("msg") or body.get("message") or body.get("error") or "").strip()
+    code = str(body.get("code", "")).strip()
+    if message and code:
+        return f"[{code}] {message}"
+    if message:
+        return message
+    if code:
+        return f"[{code}]"
+    if status_code is not None:
+        return f"HTTP {status_code}"
+    return "unknown OKX error"
+
+
+def _okx_response_is_auth_error(status_code: int, body: Mapping[str, Any]) -> bool:
+    if status_code in {401, 403}:
+        return True
+    haystack = " ".join(
+        str(body.get(key) or "")
+        for key in ("code", "msg", "message", "error", "data")
+    ).lower()
+    return any(hint in haystack for hint in _OKX_AUTH_MESSAGE_HINTS)
+
+
 def _secret(value: Any, env_name: str) -> str:
     return os.getenv(env_name, "").strip() or str(value or "").strip()
 
@@ -122,6 +181,11 @@ def _tone(data: Mapping[str, Any], fallback: Optional[ToneConfig] = None) -> Ton
 def _account_env_name(account_id: str) -> str:
     suffix = re.sub(r"[^A-Z0-9]", "_", account_id.upper())
     return f"BINANCE_SQUARE_OPENAPI_KEY_{suffix}"
+
+
+def _okx_env_name(account_id: str, field: str) -> str:
+    suffix = re.sub(r"[^A-Z0-9]", "_", account_id.upper())
+    return f"OKX_{field.upper()}_{suffix}"
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
@@ -143,7 +207,7 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
     default_tone = _tone(data.get("default_tone") or data.get("tone") or {})
     account_rows = data.get("accounts") or []
     if not isinstance(account_rows, list) or not account_rows:
-        raise RuntimeError("accounts must contain at least one Binance Square account")
+        raise RuntimeError("accounts must contain at least one publishing account")
     accounts: list[AccountConfig] = []
     seen_ids: set[str] = set()
     for index, row in enumerate(account_rows):
@@ -153,15 +217,32 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         if account_id in seen_ids:
             raise RuntimeError(f"Duplicate account id: {account_id}")
         seen_ids.add(account_id)
+        platform = str(row.get("platform") or "binance").strip().lower()
+        if platform not in VALID_PLATFORMS:
+            raise RuntimeError(
+                f"accounts[{index}].platform must be one of: {', '.join(sorted(VALID_PLATFORMS))}"
+            )
         delay = row.get("posting_delay_seconds") or [0, 0]
         if not isinstance(delay, list) or len(delay) != 2:
             raise RuntimeError(f"accounts[{index}].posting_delay_seconds must be [min, max]")
         account_ai = row.get("ai") or {}
         square_key = _secret(row.get("square_api_key"), _account_env_name(account_id))
+        okx_authorization = _secret(
+            row.get("authorization") or row.get("okx_authorization"),
+            _okx_env_name(account_id, "authorization"),
+        )
+        okx_devid = _secret(
+            row.get("devid") or row.get("okx_devid"),
+            _okx_env_name(account_id, "devid"),
+        )
         accounts.append(
             AccountConfig(
                 account_id=account_id,
+                platform=platform,  # type: ignore[arg-type]
                 square_api_key=square_key,
+                okx_authorization=okx_authorization,
+                okx_devid=okx_devid,
+                okx_group=str(row.get("okx_group") or row.get("group") or "USDT").strip() or "USDT",
                 tone=_tone(row.get("tone") or {}, default_tone),
                 enabled=bool(row.get("enabled", True)),
                 model=str(account_ai.get("model") or "").strip() or None,
@@ -226,11 +307,21 @@ def validate_config(config: AppConfig, *, require_square_key: bool = True) -> No
     if not enabled:
         raise RuntimeError("At least one account must be enabled")
     for account in enabled:
-        if require_square_key and not config.publisher.dry_run and not account.square_api_key:
-            raise RuntimeError(
-                f"Missing Square key for account {account.account_id}; set "
-                f"{_account_env_name(account.account_id)} or accounts[].square_api_key"
-            )
+        if require_square_key and not config.publisher.dry_run:
+            if account.platform == "binance" and not account.square_api_key:
+                raise RuntimeError(
+                    f"Missing Square key for account {account.account_id}; set "
+                    f"{_account_env_name(account.account_id)} or accounts[].square_api_key"
+                )
+            if account.platform == "okx" and (
+                not account.okx_authorization or not account.okx_devid
+            ):
+                raise RuntimeError(
+                    f"Missing OKX credentials for account {account.account_id}; set "
+                    f"{_okx_env_name(account.account_id, 'authorization')} / "
+                    f"{_okx_env_name(account.account_id, 'devid')} or "
+                    f"accounts[].authorization / accounts[].devid"
+                )
         if account.cooldown_seconds < 0:
             raise RuntimeError(f"Account {account.account_id} cooldown must be non-negative")
         if account.min_delay_seconds < 0 or account.max_delay_seconds < account.min_delay_seconds:
@@ -249,6 +340,115 @@ def validate_config(config: AppConfig, *, require_square_key: bool = True) -> No
         raise RuntimeError("publisher.feishu_webhook must be a Feishu bot webhook URL")
 
 
+def _coerce_assistant_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                text = item.strip()
+            elif isinstance(item, dict):
+                text = str(
+                    item.get("text")
+                    or item.get("content")
+                    or item.get("output_text")
+                    or ""
+                ).strip()
+            else:
+                text = ""
+            if text:
+                parts.append(text)
+        return "\n".join(parts).strip()
+    return ""
+
+
+def _message_text_from_choice(choice: Mapping[str, Any]) -> str:
+    message = choice.get("message")
+    if isinstance(message, dict):
+        text = _coerce_assistant_text(message.get("content"))
+        if text:
+            return text
+    for key in ("text", "content", "output_text"):
+        text = _coerce_assistant_text(choice.get(key))
+        if text:
+            return text
+    return ""
+
+
+def _chat_completion_roots(payload: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
+    roots: list[Mapping[str, Any]] = [payload]
+    seen: set[int] = {id(payload)}
+    queue: list[Mapping[str, Any]] = [payload]
+    wrapper_keys = ("data", "result", "response", "output")
+    while queue:
+        current = queue.pop(0)
+        for key in wrapper_keys:
+            nested = current.get(key)
+            if not isinstance(nested, dict):
+                continue
+            nested_id = id(nested)
+            if nested_id in seen:
+                continue
+            seen.add(nested_id)
+            roots.append(nested)
+            queue.append(nested)
+    return tuple(roots)
+
+
+def _raise_chat_completion_error(payload: Mapping[str, Any]) -> None:
+    if payload.get("success") is False:
+        message = (
+            payload.get("msg")
+            or payload.get("message")
+            or payload.get("error")
+            or "gateway returned success=false"
+        )
+        raise RuntimeError(f"AI gateway error: {message}")
+    error = payload.get("error")
+    if isinstance(error, dict):
+        message = error.get("message") or error.get("msg") or error
+        raise RuntimeError(f"AI API error: {message}")
+    if isinstance(error, str) and error.strip():
+        raise RuntimeError(f"AI API error: {error}")
+
+
+def extract_assistant_text_from_chat_response(payload: Any) -> str:
+    """Extract post text from OpenAI-compatible or gateway-wrapped chat responses."""
+
+    if not isinstance(payload, dict):
+        raise KeyError("payload")
+    _raise_chat_completion_error(payload)
+
+    for key in ("output_text", "text", "content"):
+        text = _coerce_assistant_text(payload.get(key))
+        if text:
+            return text
+
+    for root in _chat_completion_roots(payload):
+        choices = root.get("choices")
+        if not isinstance(choices, list):
+            continue
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            text = _message_text_from_choice(choice)
+            if text:
+                return text
+
+    raise KeyError("content")
+
+
+def _normalize_chat_completion_response(payload: Any) -> Mapping[str, Any]:
+    if not isinstance(payload, dict):
+        raise RuntimeError("AI response was not a JSON object")
+    return payload
+
+
+def _extract_assistant_text(result: Mapping[str, Any]) -> str:
+    return extract_assistant_text_from_chat_response(result)
+
+
 def _chat_url(base_url: str) -> str:
     return base_url + "/chat/completions" if base_url.rstrip("/").endswith("/v1") else base_url + "/v1/chat/completions"
 
@@ -259,6 +459,7 @@ def build_messages(
     max_chars: int,
     *,
     concise: bool = False,
+    platform: PlatformName = "binance",
 ) -> list[dict[str, str]]:
     symbol = normalize_symbol(str(signal["symbol"]))
     details = json.loads(signal.get("details_json") or "{}")
@@ -271,14 +472,20 @@ def build_messages(
         if concise
         else "- 在字数限制内给出必要的行情依据，避免机械罗列全部输入数据。"
     )
-    system = f"""你是币安广场的交易信号 KOL，当前口吻配置为“{tone.name}”。
+    if platform == "okx":
+        platform_rules = f"""- 这是 OKX 星球（Orbit）帖子，不是币安广场；措辞、开头、论证顺序必须与币安广场版本明显不同。
+- 自然写出币种名 {symbol}，不要写 $ 前缀 cashtag，不要写任何 URL。
+- 若提供了其他平台已发版本，必须彻底改写，禁止复用相同句式或段落结构。"""
+    else:
+        platform_rules = f"""- 必须原样包含可点击 cashtag ${symbol}，不得写任何 URL。"""
+    system = f"""你是{"OKX 星球" if platform == "okx" else "币安广场"}的交易信号 KOL，当前口吻配置为“{tone.name}”。
 人设：{tone.persona}
 
 硬性规则：
 - 只输出最终帖子正文，不要标题标签、解释、Markdown 代码块。
 - 全文使用简体中文，控制在 {max_chars} 个字符以内。
 {concise_rule}
-- 必须原样包含可点击 cashtag ${symbol}，不得写任何 URL。
+{platform_rules}
 - 明确表达“{direction_text}”，不得把 LONG/SHORT 方向写反。
 - 只能使用输入信号里的事实；不得捏造价格、涨幅、指标、新闻或内幕。
 - 不得声称稳赚、保本，也不得煽动用户梭哈或借贷交易。
@@ -302,19 +509,35 @@ def build_messages(
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def clean_generated_text(text: str, *, symbol: str, direction: str, max_chars: int) -> str:
+def clean_generated_text(
+    text: str,
+    *,
+    symbol: str,
+    direction: str,
+    max_chars: int,
+    platform: PlatformName = "binance",
+) -> str:
     cleaned = text.strip()
     cleaned = re.sub(r"^```(?:text|markdown)?\s*", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s*```$", "", cleaned)
     cleaned = re.sub(r"https?://\S+", "", cleaned).strip()
-    cashtag = f"${normalize_symbol(symbol)}"
-    cashtag_pattern = rf"\${re.escape(normalize_symbol(symbol))}(?![A-Z0-9])"
-    if not re.search(cashtag_pattern, cleaned, flags=re.IGNORECASE):
-        cleaned = f"{cashtag} {cleaned}"
+    normalized = normalize_symbol(symbol)
     direction_terms = ("做多", "看多") if direction == "LONG" else (("做空", "看空") if direction == "SHORT" else ("观察", "等待"))
-    if not any(term in cleaned for term in direction_terms):
-        label = {"LONG": "看多", "SHORT": "看空", "WATCH": "观察"}[direction]
-        cleaned = f"{cashtag} {label}。{cleaned.replace(cashtag, '', 1).lstrip()}"
+    if platform == "binance":
+        cashtag = f"${normalized}"
+        cashtag_pattern = rf"\${re.escape(normalized)}(?![A-Z0-9])"
+        if not re.search(cashtag_pattern, cleaned, flags=re.IGNORECASE):
+            cleaned = f"{cashtag} {cleaned}"
+        if not any(term in cleaned for term in direction_terms):
+            label = {"LONG": "看多", "SHORT": "看空", "WATCH": "观察"}[direction]
+            cleaned = f"{cashtag} {label}。{cleaned.replace(cashtag, '', 1).lstrip()}"
+    else:
+        if normalized not in cleaned.upper().replace("$", ""):
+            label = {"LONG": "看多", "SHORT": "看空", "WATCH": "观察"}[direction]
+            cleaned = f"{normalized} {label}。{cleaned}"
+        elif not any(term in cleaned for term in direction_terms):
+            label = {"LONG": "看多", "SHORT": "看空", "WATCH": "观察"}[direction]
+            cleaned = f"{label}。{cleaned}"
     if len(cleaned) > max_chars:
         cleaned = cleaned[: max_chars - 1].rstrip("，,。；; ") + "。"
     if not cleaned:
@@ -379,41 +602,90 @@ class MarketContextClient:
 
 
 class AIWriter:
-    def __init__(self, config: AIConfig, tone: ToneConfig, max_chars: int):
+    def __init__(
+        self,
+        config: AIConfig,
+        tone: ToneConfig,
+        max_chars: int,
+        *,
+        platform: PlatformName = "binance",
+    ):
         self.config = config
         self.tone = tone
         self.max_chars = min(max_chars, config.max_chars)
+        self.platform = platform
 
     async def generate(self, signal: Mapping[str, Any], avoid_texts: tuple[str, ...] = ()) -> str:
         messages = build_messages(
-            signal, self.tone, self.max_chars, concise=self.config.concise
+            signal,
+            self.tone,
+            self.max_chars,
+            concise=self.config.concise,
+            platform=self.platform,
         )
         if avoid_texts:
             excerpts = "\n---\n".join(text[:600] for text in avoid_texts[-5:])
+            label = (
+                "其他平台或其他账号已发版本"
+                if self.platform == "okx"
+                else "同一信号的其他账号文案"
+            )
             messages[0]["content"] += (
-                "\n- 这是同一信号的其他账号文案。必须换开头、句式和论述顺序，禁止照抄：\n"
+                f"\n- 这是{label}。必须换开头、句式和论述顺序，禁止照抄：\n"
                 + excerpts
             )
-        payload = {
+        request_payload = {
             "model": self.config.model,
             "messages": messages,
             "temperature": self.config.temperature,
         }
         headers = {"Authorization": f"Bearer {self.config.api_key}"}
-        async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
-            response = await client.post(_chat_url(self.config.base_url), headers=headers, json=payload)
-            response.raise_for_status()
-            result = response.json()
-        try:
-            text = result["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise RuntimeError("AI response did not contain choices[0].message.content") from exc
-        return clean_generated_text(
-            str(text),
-            symbol=str(signal["symbol"]),
-            direction=str(signal["direction"]),
-            max_chars=self.max_chars,
-        )
+        last_error: Optional[Exception] = None
+        for attempt in range(3):
+            try:
+                async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
+                    response = await client.post(
+                        _chat_url(self.config.base_url),
+                        headers=headers,
+                        json=request_payload,
+                    )
+                    response.raise_for_status()
+                    response_body = response.json()
+                if not isinstance(response_body, dict):
+                    raise KeyError("payload")
+                _raise_chat_completion_error(response_body)
+                text = extract_assistant_text_from_chat_response(response_body)
+            except RuntimeError as exc:
+                if not str(exc).startswith("AI "):
+                    raise
+                last_error = exc
+                logger.warning(
+                    "AI gateway returned error on attempt {} model={}: {}",
+                    attempt + 1,
+                    self.config.model,
+                    exc,
+                )
+                continue
+            except KeyError as exc:
+                last_error = RuntimeError(
+                    "AI response did not contain usable assistant text"
+                )
+                last_error.__cause__ = exc
+                logger.warning(
+                    "AI returned malformed payload on attempt {} model={}: {}",
+                    attempt + 1,
+                    self.config.model,
+                    response_body if "response_body" in locals() else None,
+                )
+                continue
+            return clean_generated_text(
+                text,
+                symbol=str(signal["symbol"]),
+                direction=str(signal["direction"]),
+                max_chars=self.max_chars,
+                platform=self.platform,
+            )
+        raise last_error or RuntimeError("AI returned empty post text")
 
 
 class SquareClient:
@@ -478,6 +750,90 @@ class SquareClient:
         if code in {"20020", "220011"}:
             return
         raise RuntimeError(f"Square key validation failed [{code}]: {payload.get('message')}")
+
+
+class OkxClient:
+    def __init__(
+        self,
+        authorization: str,
+        devid: str,
+        *,
+        group: str = "USDT",
+        timeout_seconds: float = 30.0,
+    ):
+        self.authorization = authorization.strip()
+        self.devid = devid.strip()
+        self.group = group.strip() or "USDT"
+        self.timeout_seconds = timeout_seconds
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "accept": "application/json",
+            "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "app-type": "web",
+            "authorization": self.authorization,
+            "content-type": "application/json",
+            "devid": self.devid,
+            "origin": "https://www.okx.com",
+            "platform": "web",
+            "referer": "https://www.okx.com/zh-hans/orbit",
+            "user-agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+            ),
+            "x-cdn": "https://www.okx.com",
+            "x-utc": "8",
+            "x-zkdex-env": "0",
+        }
+
+    async def publish(self, text: str) -> PublishResult:
+        publish_id = str(uuid.uuid4())
+        params = {"t": str(int(time.time() * 1000))}
+        payload = {
+            "content": text,
+            "group": self.group,
+            "publishId": publish_id,
+        }
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            response = await client.post(
+                OKX_PUBLISH_URL,
+                params=params,
+                headers=self._headers(),
+                json=payload,
+            )
+        try:
+            body = response.json()
+        except ValueError:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        if _okx_response_is_auth_error(response.status_code, body):
+            raise OkxAuthorizationError(
+                "OKX authorization invalid: "
+                + _okx_error_message(body, status_code=response.status_code)
+            )
+        response.raise_for_status()
+        code = str(body.get("code", ""))
+        if code not in {"0", "00000"}:
+            message = _okx_error_message(body)
+            if _okx_response_is_auth_error(response.status_code, body):
+                raise OkxAuthorizationError(f"OKX authorization invalid: {message}")
+            raise RuntimeError(f"OKX Orbit API {message}")
+        data = body.get("data") or {}
+        post_id = (
+            str(data["id"])
+            if data.get("id") is not None
+            else str(data.get("contentId") or publish_id)
+        )
+        return PublishResult(
+            post_id,
+            data.get("shareLink") or data.get("url"),
+            {"publishId": publish_id, **body},
+        )
+
+    def validate_credentials(self) -> None:
+        if not self.authorization or not self.devid:
+            raise RuntimeError("OKX authorization and devid must not be empty")
 
 
 class SignalStore:
@@ -735,8 +1091,9 @@ class KOLPublisher:
         publisher = self.config.publisher
         if not publisher.feishu_enabled or not publisher.feishu_webhook:
             return
+        platform_label = "OKX 星球" if account.platform == "okx" else "币安广场"
         lines = [
-            "币安广场 KOL 已发布",
+            f"{platform_label} KOL 已发布",
             f"账号：{account.account_id}",
             f"币种：${delivery['symbol']}",
             f"方向：{delivery['direction']}",
@@ -770,6 +1127,39 @@ class KOLPublisher:
                         f"恢复时间（UTC）：{resume_at}",
                         f"接口信息：{error}",
                         "该账号现有待发布任务已抑制，不会继续累积或重试。",
+                    )
+                )
+            },
+        }
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(publisher.feishu_webhook, json=payload)
+            response.raise_for_status()
+
+    async def notify_okx_authorization_error(
+        self,
+        account: AccountConfig,
+        error: OkxAuthorizationError,
+        blocked_until: float,
+    ) -> None:
+        publisher = self.config.publisher
+        if not publisher.feishu_enabled or not publisher.feishu_webhook:
+            return
+        resume_at = datetime.fromtimestamp(blocked_until, timezone.utc).isoformat(
+            timespec="minutes"
+        )
+        payload = {
+            "msg_type": "text",
+            "content": {
+                "text": "\n".join(
+                    (
+                        "OKX 星球 KOL 发布已暂停",
+                        f"账号：{account.account_id}",
+                        "原因：authorization 无效或已过期",
+                        f"接口信息：{error}",
+                        f"本地保护恢复时间（UTC）：{resume_at}",
+                        "请在 kol_config.json 更新 authorization / devid 后保存配置，",
+                        "或手动重启 alphapumphunter-kol-publisher.service。",
+                        "该账号现有待发布任务已抑制，不会继续重试。",
                     )
                 )
             },
@@ -819,7 +1209,12 @@ class KOLPublisher:
                     else self.config.ai.max_chars
                 ),
             )
-            writer = AIWriter(ai_config, account.tone, self.config.publisher.max_post_chars)
+            writer = AIWriter(
+                ai_config,
+                account.tone,
+                self.config.publisher.max_post_chars,
+                platform=account.platform,
+            )
             other_texts = self.store.generated_by_other_accounts(
                 int(delivery["signal_id"]), account.account_id
             )
@@ -833,8 +1228,24 @@ class KOLPublisher:
             if self.config.publisher.dry_run:
                 result = PublishResult(None, None, {"dry_run": True})
                 logger.info(
-                    "DRY RUN delivery {} account {}:\n{}",
-                    delivery["delivery_id"], account.account_id, text,
+                    "DRY RUN delivery {} account {} ({}):\n{}",
+                    delivery["delivery_id"],
+                    account.account_id,
+                    account.platform,
+                    text,
+                )
+            elif account.platform == "okx":
+                result = await OkxClient(
+                    account.okx_authorization,
+                    account.okx_devid,
+                    group=account.okx_group,
+                ).publish(text)
+                logger.info(
+                    "Published OKX delivery {} for account {} publishId={}: {}",
+                    delivery["delivery_id"],
+                    account.account_id,
+                    (result.raw or {}).get("publishId"),
+                    result.post_url or result.post_id or "post id unavailable",
                 )
             else:
                 result = await SquareClient(account.square_api_key).publish(text)
@@ -854,7 +1265,32 @@ class KOLPublisher:
                         "Square post succeeded, but Feishu notification failed for delivery {}",
                         delivery["delivery_id"],
                     )
+        except OkxAuthorizationError as exc:
+            blocked_until, suppressed_count = self.store.block_account_for_daily_post_limit(
+                account.account_id,
+                self.config.publisher.daily_post_limit_pause_seconds,
+                exc,
+            )
+            logger.warning(
+                "OKX authorization invalid for account {}; paused until {} and suppressed {} delivery(s)",
+                account.account_id,
+                datetime.fromtimestamp(blocked_until, timezone.utc).isoformat(timespec="minutes"),
+                suppressed_count,
+            )
+            try:
+                await self.notify_okx_authorization_error(account, exc, blocked_until)
+            except Exception:
+                logger.exception(
+                    "Unable to send Feishu OKX auth alert for account {}", account.account_id
+                )
         except SquareDailyPostLimitError as exc:
+            if account.platform != "binance":
+                self.store.mark_failed(delivery, exc, self.config.publisher)
+                logger.exception(
+                    "Unexpected Square daily-limit error for non-Binance account {}",
+                    account.account_id,
+                )
+                return True
             blocked_until, suppressed_count = self.store.block_account_for_daily_post_limit(
                 account.account_id,
                 self.config.publisher.daily_post_limit_pause_seconds,
@@ -890,7 +1326,9 @@ class KOLPublisher:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="AI KOL publisher for Binance Square")
+    parser = argparse.ArgumentParser(
+        description="AI KOL publisher for Binance Square and OKX Orbit"
+    )
     parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, help="Local JSON config path")
     parser.add_argument("--dry-run", action="store_true", help="Generate copy without calling Square")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -902,8 +1340,11 @@ def build_parser() -> argparse.ArgumentParser:
     discard = sub.add_parser(
         "discard-pending", help="Discard queued deliveries without allowing them to be recreated"
     )
-    discard.add_argument("--account", help="Only discard one Binance Square account's queue")
-    sub.add_parser("validate-accounts", help="Validate all enabled Square keys without posting")
+    discard.add_argument("--account", help="Only discard one account's queue")
+    sub.add_parser(
+        "validate-accounts",
+        help="Validate all enabled Binance Square keys and OKX credentials without posting",
+    )
     return parser
 
 
@@ -921,8 +1362,16 @@ async def async_main() -> None:
         for account in config.accounts:
             if not account.enabled:
                 continue
-            await SquareClient(account.square_api_key).validate_key()
-            logger.info("Square key is valid for account {}", account.account_id)
+            if account.platform == "okx":
+                OkxClient(
+                    account.okx_authorization,
+                    account.okx_devid,
+                    group=account.okx_group,
+                ).validate_credentials()
+                logger.info("OKX credentials are configured for account {}", account.account_id)
+            else:
+                await SquareClient(account.square_api_key).validate_key()
+                logger.info("Square key is valid for account {}", account.account_id)
         return
     if args.command == "discard-pending":
         discarded = SignalStore(config.publisher.database_path).discard_pending(args.account)

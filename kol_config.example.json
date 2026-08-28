@@ -21,6 +21,7 @@
     {
       "id": "baolao_01",
       "enabled": true,
+      "platform": "binance",
       "square_api_key": "",
       "cooldown_seconds": 3600,
       "posting_delay_seconds": [0, 8],
@@ -38,6 +39,7 @@
     {
       "id": "analyst_02",
       "enabled": false,
+      "platform": "binance",
       "square_api_key": "",
       "cooldown_seconds": 3600,
       "posting_delay_seconds": [12, 35],
@@ -51,6 +53,26 @@
         "name": "冷面盘口交易员",
         "persona": "像盯盘多年的合约交易员，冷静、克制、句子短，先说结论再列关键数据。",
         "extra_prompt": "不用贴吧黑话，风险提示保持专业。"
+      }
+    },
+    {
+      "id": "okx_orbit_01",
+      "enabled": false,
+      "platform": "okx",
+      "authorization": "",
+      "devid": "",
+      "okx_group": "USDT",
+      "cooldown_seconds": 3600,
+      "posting_delay_seconds": [5, 20],
+      "ai": {
+        "temperature": 0.98,
+        "concise": true,
+        "max_chars": 280
+      },
+      "tone": {
+        "name": "OKX星球直球选手",
+        "persona": "像在 OKX 星球混熟的合约老炮，口语化、节奏快，但结论必须基于输入信号。",
+        "extra_prompt": "这是 OKX 星球专用文案，必须和币安广场版本明显不同，不要复用相同开头。"
       }
     }
   ],

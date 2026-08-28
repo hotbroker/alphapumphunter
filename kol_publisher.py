@@ -31,6 +31,7 @@ SQUARE_POST_URL = (
 )
 OKX_PUBLISH_URL = "https://www.okx.com/priapi/v5/content/ugc/publish"
 OKX_INSTRUMENTS_URL = "https://www.okx.com/api/v5/public/instruments"
+OKX_ORBIT_POST_URL_PREFIX = "https://www.okx.com/zh-hans/orbit/post/"
 BINANCE_FAPI_KLINES_URL = "https://www.binance.com/fapi/v1/klines"
 VALID_PLATFORMS = frozenset({"binance", "okx"})
 PlatformName = Literal["binance", "okx"]
@@ -454,6 +455,10 @@ def _chat_url(base_url: str) -> str:
     return base_url + "/chat/completions" if base_url.rstrip("/").endswith("/v1") else base_url + "/v1/chat/completions"
 
 
+def okx_orbit_post_url(post_id: str) -> str:
+    return f"{OKX_ORBIT_POST_URL_PREFIX}{str(post_id).strip()}"
+
+
 def build_messages(
     signal: Mapping[str, Any],
     tone: ToneConfig,
@@ -869,14 +874,16 @@ class OkxClient:
                 raise OkxAuthorizationError(f"OKX authorization invalid: {message}")
             raise RuntimeError(f"OKX Orbit API {message}")
         data = body.get("data") or {}
-        post_id = (
-            str(data["id"])
-            if data.get("id") is not None
-            else str(data.get("contentId") or publish_id)
-        )
+        api_post_id = data.get("id")
+        if api_post_id is None:
+            api_post_id = data.get("contentId")
+        post_id = str(api_post_id).strip() if api_post_id is not None else None
+        post_url = data.get("shareLink") or data.get("url")
+        if not post_url and post_id:
+            post_url = okx_orbit_post_url(post_id)
         return PublishResult(
             post_id,
-            data.get("shareLink") or data.get("url"),
+            post_url,
             {"publishId": publish_id, **body},
         )
 

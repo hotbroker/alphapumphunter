@@ -16,6 +16,7 @@ from kol_publisher import (
     OkxClient,
     OkxSwapCatalog,
     PublishResult,
+    okx_orbit_post_url,
     PublisherConfig,
     SignalStore,
     SquareClient,
@@ -489,6 +490,25 @@ class OkxClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payloads[0]["publishId"], first_id)
         self.assertEqual(payloads[1]["publishId"], second_id)
         self.assertEqual(payloads[0]["group"], "USDT")
+        self.assertEqual(first.post_id, "123")
+        self.assertEqual(first.post_url, okx_orbit_post_url("123"))
+
+    async def test_publish_builds_orbit_post_url_from_numeric_id(self):
+        response = mock.Mock()
+        response.status_code = 200
+        response.json.return_value = {"code": "0", "data": {"id": "85836648205728"}}
+        client = mock.AsyncMock()
+        client.post.return_value = response
+        client_context = mock.MagicMock()
+        client_context.__aenter__ = mock.AsyncMock(return_value=client)
+        client_context.__aexit__ = mock.AsyncMock(return_value=False)
+        with mock.patch("kol_publisher.httpx.AsyncClient", return_value=client_context):
+            result = await OkxClient("jwt", "devid").publish("ACE 看多")
+        self.assertEqual(result.post_id, "85836648205728")
+        self.assertEqual(
+            result.post_url,
+            "https://www.okx.com/zh-hans/orbit/post/85836648205728",
+        )
 
     async def test_auth_error_response_raises_authorization_error(self):
         response = mock.Mock()

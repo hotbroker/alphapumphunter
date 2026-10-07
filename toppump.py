@@ -632,7 +632,7 @@ async def cmd_run_simple(
                     vol_usd_list = en.get("vol_usd_list", [])
                     vol_last5 = vol_usd_list[-5:]
 
-                    if energy_level >= 2 or  max(vol_last5)>800*10000:
+                    if energy_level >= 2 or  (vol_last5 and len(vol_last5)>0 and max(vol_last5)>800*10000):
                         prev = last_alert_ts.get(sym, 0)
                         if now_ts - prev >= cooldown_secs:
                             last_alert_ts[sym] = now_ts

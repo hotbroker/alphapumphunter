@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import utils
 import traceback
 from health_reporter import KumaHealthReporter
+from binance_contract_types import resolve_contract_type
 
 
 health_reporter = KumaHealthReporter("toppump")
@@ -352,6 +353,7 @@ def filter_candidates(
     only_usdt: bool,
     min_quote_volume: float,
     min_pct: float,
+    only_perpetual: bool = False,
 ) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     now = time.time()
@@ -363,6 +365,9 @@ def filter_candidates(
         sym = r.get("symbol", "")
         if only_usdt and not (isinstance(sym, str) and sym.endswith("USDT") and "_" not in sym):
             continue
+        if only_perpetual and isinstance(sym, str) and sym:
+            if resolve_contract_type(sym) != "PERPETUAL":
+                continue
         qv = _to_float(r, "quoteVolume", 0.0)
         chg = _to_float(r, "priceChangePercent", 0.0)
         if qv < min_quote_volume:
@@ -400,6 +405,11 @@ async def main():
     parser.add_argument("--all", action="store_true", help="Do not filter to USDT symbols only")
     parser.add_argument("--json", default=None, help="Optional path to save filtered results with energy as JSON")
     parser.add_argument("--concurrency", type=int, default=8, help="Concurrent energy checks")
+    parser.add_argument(
+        "--perpetual-only",
+        action="store_true",
+        help="Keep only PERPETUAL USDT pairs (exclude TRADIFI/stock etc.) via binance_contract_types.json",
+    )
     args = parser.parse_args()
 
     logger.info("Fetching Binance futures 24h tickers…")
@@ -409,6 +419,7 @@ async def main():
         only_usdt=not args.all,
         min_quote_volume=args.min_quote,
         min_pct=args.min_pct,
+        only_perpetual=args.perpetual_only,
     )
     logger.info(f"Filtered to {len(filtered)} candidates after volume/pct/usdt filters")
     # Compute energy concurrently
@@ -455,7 +466,15 @@ def _format_buy_ratio(ratios: List[float], last_n: int = 5) -> str:
     return "[" + ", ".join(f"{x:.2f}" for x in arr) + "]"
 
 
-async def _scan_once(limit: int, min_quote: float, min_pct: float, only_usdt: bool, concurrency: int, json_path: Optional[str]):
+async def _scan_once(
+    limit: int,
+    min_quote: float,
+    min_pct: float,
+    only_usdt: bool,
+    concurrency: int,
+    json_path: Optional[str],
+    only_perpetual: bool = False,
+):
     logger.info("Fetching Binance futures 24h tickers…")
     rows = await fetch_binance_futures_24h()
     filtered = filter_candidates(
@@ -463,6 +482,7 @@ async def _scan_once(limit: int, min_quote: float, min_pct: float, only_usdt: bo
         only_usdt=only_usdt,
         min_quote_volume=min_quote,
         min_pct=min_pct,
+        only_perpetual=only_perpetual,
     )
 
     # Compute energy concurrently
@@ -518,6 +538,7 @@ async def cmd_run_simple(
     only_usdt: bool,
     concurrency: int,
     *,
+    only_perpetual: bool,
     notify: bool,
     notify_to: str,
     endpoint: str,
@@ -575,6 +596,7 @@ async def cmd_run_simple(
                 only_usdt=only_usdt,
                 min_quote_volume=min_quote,
                 min_pct=min_pct,
+                only_perpetual=only_perpetual,
             )
 
             sem = asyncio.Semaphore(max(1, concurrency))
@@ -610,7 +632,7 @@ async def cmd_run_simple(
                     vol_usd_list = en.get("vol_usd_list", [])
                     vol_last5 = vol_usd_list[-5:]
 
-                    if energy_level >= 2 and max(vol_last5)>800*10000:
+                    if energy_level >= 2 or  max(vol_last5)>800*10000:
                         prev = last_alert_ts.get(sym, 0)
                         if now_ts - prev >= cooldown_secs:
                             last_alert_ts[sym] = now_ts
@@ -747,6 +769,11 @@ async def cli():
     p_scan.add_argument("--all", action="store_true", help="Do not filter to USDT symbols only")
     p_scan.add_argument("--json", default=None, help="Optional path to save filtered results with energy as JSON")
     p_scan.add_argument("--concurrency", type=int, default=8, help="Concurrent energy checks")
+    p_scan.add_argument(
+        "--perpetual-only",
+        action="store_true",
+        help="Keep only PERPETUAL USDT pairs (exclude TRADIFI/stock etc.) via binance_contract_types.json",
+    )
 
     p_run = sub.add_parser("run", help="Continuously monitor and print results each interval, with optional push")
     p_run.add_argument("--interval", type=int, default=60, help="Polling interval seconds (default 60)")
@@ -761,6 +788,11 @@ async def cli():
     p_run.add_argument("--endpoint", default="http://gossiphere.com:9999/cmd", help="Push endpoint URL")
     # threshold/window not required when pushing by energy level only
     p_run.add_argument("--cooldown-minutes", type=int, default=1440, help="Cooldown minutes between alerts per symbol (default 24h)")
+    p_run.add_argument(
+        "--perpetual-only",
+        action="store_true",
+        help="Keep only PERPETUAL USDT pairs (exclude TRADIFI/stock etc.) via binance_contract_types.json",
+    )
 
     args = parser.parse_args()
 
@@ -772,6 +804,7 @@ async def cli():
             only_usdt=not getattr(args, 'all', False),
             concurrency=args.concurrency,
             json_path=getattr(args, 'json', None),
+            only_perpetual=getattr(args, "perpetual_only", False),
         )
     elif args.cmd == "run":
         print(f'args:{args}')
@@ -782,6 +815,7 @@ async def cli():
             min_pct=args.min_pct,
             only_usdt=not args.all,
             concurrency=args.concurrency,
+            only_perpetual=args.perpetual_only,
             notify=args.notify,
             notify_to=args.notify_to,
             endpoint=args.endpoint,

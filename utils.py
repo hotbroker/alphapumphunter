@@ -308,9 +308,6 @@ async def send_notification_feishu_async(
     timeout_sec: float = 10.0,
 ) -> None:
 
-    return
-
-
 
     try:
         feishudata = {"msg_type":"text","content":{"text":f"{title}\n{content}"}}
@@ -331,6 +328,8 @@ async def send_notification_async(
     endpoint: str = 'http://gossiphere.com:9999/cmd',
     timeout_sec: float = 10.0,
 ) -> None:
+
+    return
 
     payload = {
         "cmd": "sendtext",

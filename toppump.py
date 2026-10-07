@@ -123,6 +123,7 @@ async def send_notification_async(
     else:
         await utils.send_notification_feishu_async(utils.feishu_alpha,content, title)
 
+    return
     payload = {
         "cmd": "sendtext",
         "touser": touser,

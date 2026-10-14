@@ -71,9 +71,9 @@ async def send_notification_async(
     if touser=='veryverybad':
         await utils.send_notification_feishu_async(utils.feishu_myself, content, title)
     else:
-        await utils.send_notification_feishu_async(utils.feishu_alpha,content, title)
+        await utils.send_notification_feishu_async(touser,content, title)
 
-
+    return
     payload = {
         "cmd": "sendtext",
         "touser": touser,

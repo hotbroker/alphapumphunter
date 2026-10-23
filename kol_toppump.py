@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import utils
 import traceback
 from health_reporter import KumaHealthReporter
+from binance_contract_types import is_usdt_crypto_perpetual
 from kol_signal import emit_signal
 from kol_runtime import configure_source, setting
 
@@ -263,6 +264,8 @@ def filter_candidates(
 
         sym = r.get("symbol", "")
         if only_usdt and not (isinstance(sym, str) and sym.endswith("USDT") and "_" not in sym):
+            continue
+        if isinstance(sym, str) and sym and not is_usdt_crypto_perpetual(sym):
             continue
         qv = _to_float(r, "quoteVolume", 0.0)
         chg = _to_float(r, "priceChangePercent", 0.0)

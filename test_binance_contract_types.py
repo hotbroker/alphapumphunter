@@ -7,6 +7,7 @@ from unittest import mock
 
 from binance_contract_types import (
     build_contract_types,
+    is_usdt_crypto_perpetual,
     load_contract_types,
     resolve_contract_type,
     write_contract_types,
@@ -39,6 +40,17 @@ class ContractTypeCacheTests(unittest.TestCase):
         self.assertEqual(contract_types["BTCUSDT_260925"], "CURRENT_QUARTER")
         self.assertEqual(contract_types["XAUUSDT"], "TRADIFI_PERPETUAL")
         self.assertNotIn("BTCBUSD", contract_types)
+
+    def test_is_usdt_crypto_perpetual_excludes_tradfi(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "contract_types.json"
+            write_contract_types(
+                {"BTCUSDT": "PERPETUAL", "XAUUSDT": "TRADIFI_PERPETUAL"},
+                cache_path,
+            )
+            self.assertTrue(is_usdt_crypto_perpetual("BTCUSDT", path=cache_path))
+            self.assertFalse(is_usdt_crypto_perpetual("XAUUSDT", path=cache_path))
+            self.assertFalse(is_usdt_crypto_perpetual("BTCUSDT_260925", path=cache_path))
 
     def test_cache_reload_observes_atomic_replacement(self):
         with tempfile.TemporaryDirectory() as directory:

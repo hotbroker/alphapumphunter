@@ -8,6 +8,7 @@ from typing import Dict, List, Any
 import httpx
 from loguru import logger
 import utils
+from binance_contract_types import is_usdt_crypto_perpetual
 from kol_runtime import configure_source, setting
 
 KOL_SOURCE = configure_source("instant_drop_trigger")
@@ -121,7 +122,12 @@ async def monitor_loop():
                     symbol = ticker.get("symbol", "")
                     quote_volume = float(ticker.get("quoteVolume", 0.0))
 
-                    if symbol.endswith("USDT") and quote_volume >= VOLUME_THRESHOLD:
+                    if (
+                        symbol.endswith("USDT")
+                        and "_" not in symbol
+                        and is_usdt_crypto_perpetual(symbol)
+                        and quote_volume >= VOLUME_THRESHOLD
+                    ):
                         qualified_tickers.append(ticker)
 
                 logger.info(f"Found {len(qualified_tickers)} symbols with 24h volume >= {VOLUME_THRESHOLD / 1000000:.0f}M USDT")

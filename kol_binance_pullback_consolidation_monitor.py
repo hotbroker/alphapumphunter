@@ -32,6 +32,7 @@ from typing import Any, Iterable, Optional
 import httpx
 from loguru import logger
 
+from binance_contract_types import is_usdt_crypto_perpetual
 from health_reporter import KumaHealthReporter
 from kol_signal import emit_signal
 from kol_runtime import configure_source, setting
@@ -135,8 +136,8 @@ def format_usdt(value: float) -> str:
 
 
 def is_usdt_perpetual(symbol: str) -> bool:
-    """Ticker 中可能会出现交割合约；仅保留标准 USDT 永续合约。"""
-    return symbol.endswith("USDT") and "_" not in symbol
+    """Ticker 中可能会出现交割合约或 TRADFI 股票合约；仅保留 crypto PERPETUAL。"""
+    return is_usdt_crypto_perpetual(symbol)
 
 
 def eligible_tickers(rows: Iterable[dict[str, Any]], min_quote_volume: float) -> list[dict[str, Any]]:

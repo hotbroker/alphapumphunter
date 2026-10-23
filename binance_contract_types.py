@@ -94,6 +94,14 @@ def resolve_contract_type(
     return fallback.upper()
 
 
+def is_usdt_crypto_perpetual(symbol: str, *, path: str | Path | None = None) -> bool:
+    """True for standard USD-M crypto perpetuals; false for TRADFI/stock and delivery pairs."""
+    pair = normalize_usdt_pair(symbol)
+    if "_" in pair or not pair.endswith("USDT"):
+        return False
+    return resolve_contract_type(symbol, path=path) == "PERPETUAL"
+
+
 def build_contract_types(exchange_info: Mapping[str, object]) -> dict[str, str]:
     """Extract exact USDT symbols so quarterly contracts cannot replace a perp pair."""
     symbols = exchange_info.get("symbols", [])

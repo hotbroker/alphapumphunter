@@ -3,6 +3,7 @@
 
 - 轮询币安合约：最近 N 根 5m K，窗口内先低后高涨幅 ≥ 阈值则告警
 - 飞书群动态加币：在指定群发 symbol（如 AKE / AKEUSDT），校验合约是否可交易后纳入监控
+- 自动发现：24h 跌 ≥30%，且近 7 日 4h 相对最高收盘跌 ≥70% → 自动加入监控
 - 加币回执 / 拉盘告警 / 到期通知 一律发到飞书指令群（应用机器人），不再走 webhook
 - 每个 symbol 首次纳入起 VALID_HOURS 小时有效，到期写入本地状态，重启不重置
 """
@@ -14,7 +15,7 @@ import os
 import re
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -32,6 +33,16 @@ PUMP_THRESHOLD = 0.15
 CHECK_INTERVAL = 30
 VALID_HOURS = 20
 ALERT_COOLDOWN = 15 * 60
+
+# 自动发现暴跌币
+DISCOVER_ENABLED = True
+DISCOVER_INTERVAL = 5 * 60          # 每 5 分钟扫一次
+DISCOVER_DAY_DROP = 0.30            # 24h 跌幅 ≥ 30%
+DISCOVER_WEEK_DROP = 0.70           # 近 N 日相对最高收盘跌 ≥ 70%
+DISCOVER_LOOKBACK_DAYS = 7          # 用 4h K 回看天数
+DISCOVER_KLINE_INTERVAL = "4h"
+DISCOVER_MIN_QUOTE_VOLUME = 0.0     # 可按需过滤成交额
+
 FEISHU_KEY_FILE = "feishubot.key"
 FEISHU_CHAT_ID = "oc_a36b74688f4976374da15b8b4f601b36"
 STATE_FILE = "temp_pump_monitor_state.json"
@@ -39,6 +50,7 @@ STATE_FILE = "temp_pump_monitor_state.json"
 BINANCE_FAPI_KLINES = "https://fapi.binance.com/fapi/v1/klines"
 BINANCE_FAPI_EXCHANGE_INFO = "https://fapi.binance.com/fapi/v1/exchangeInfo"
 BINANCE_FAPI_TICKER_PRICE = "https://fapi.binance.com/fapi/v1/ticker/price"
+BINANCE_FAPI_TICKER_24H = "https://fapi.binance.com/fapi/v1/ticker/24hr"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -54,6 +66,7 @@ _feishu_app_id = ""
 _feishu_app_secret = ""
 _token_cache: dict[str, Any] = {"token": "", "expire_at": 0.0}
 _symbol_cache: dict[str, Any] = {"symbols": set(), "expire_at": 0.0}
+_last_discover_ts = 0.0
 
 if __name__ == "__main__":
     logger.add(
@@ -336,19 +349,161 @@ def start_feishu_ws() -> None:
     cli.start()
 
 
-async def fetch_klines(client: httpx.AsyncClient, symbol: str) -> list | None:
-    params = {"symbol": symbol, "interval": INTERVAL, "limit": KLINE_LIMIT}
+async def get_all_tickers(
+    client: httpx.AsyncClient,
+    quote_volume: float = DISCOVER_MIN_QUOTE_VOLUME,
+) -> dict[str, dict]:
+    """获取合约 24h ticker，对齐 oi_monitor.get_all_tickers。"""
+    try:
+        r = await client.get(BINANCE_FAPI_TICKER_24H, headers=HEADERS)
+        r.raise_for_status()
+        return {
+            item["symbol"]: item
+            for item in r.json()
+            if float(item.get("quoteVolume", 0)) > quote_volume
+        }
+    except Exception as e:
+        logger.warning(f"获取 ticker 失败: {e}")
+        return {}
+
+
+async def fetch_klines(
+    client: httpx.AsyncClient,
+    symbol: str,
+    interval: str = INTERVAL,
+    limit: int = KLINE_LIMIT,
+) -> list | None:
+    params = {"symbol": symbol, "interval": interval, "limit": limit}
     try:
         r = await client.get(BINANCE_FAPI_KLINES, headers=HEADERS, params=params)
         r.raise_for_status()
         data = r.json()
-        if not isinstance(data, list) or len(data) < KLINE_LIMIT:
+        if not isinstance(data, list) or len(data) < 1:
             logger.warning(f"{symbol} K线数量不足: got={len(data) if isinstance(data, list) else data}")
             return None
         return data
     except Exception as e:
         logger.warning(f"获取K线失败 {symbol}: {e}")
         return None
+
+
+def calc_drop_from_high_close(
+    klines: list,
+    last_price: float,
+    days: int = DISCOVER_LOOKBACK_DAYS,
+) -> tuple[float, float, str]:
+    """近 days 天 4h 窗口内，相对最高收盘价的跌幅。"""
+    cutoff_ms = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
+    window = [k for k in klines if k[0] >= cutoff_ms] or klines
+    best = max(window, key=lambda k: float(k[4]))
+    high_close = float(best[4])
+    t = datetime.fromtimestamp(best[0] / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    if high_close <= 0:
+        return 0.0, high_close, t
+    return 1.0 - last_price / high_close, high_close, t
+
+
+async def discover_dump_symbols(client: httpx.AsyncClient) -> list[dict[str, Any]]:
+    """
+    自动发现：
+      1) 24h 跌幅 ≥ DISCOVER_DAY_DROP
+      2) 近 DISCOVER_LOOKBACK_DAYS 日 4h，相对最高收盘跌 ≥ DISCOVER_WEEK_DROP
+    """
+    tickers = await get_all_tickers(client)
+    if not tickers:
+        return []
+
+    try:
+        trading = refresh_trading_symbols()
+    except Exception:
+        trading = set()
+
+    # 7天 4h ≈ 42 根，多取一点
+    kline_limit = DISCOVER_LOOKBACK_DAYS * 6 + 6
+    candidates: list[dict[str, Any]] = []
+
+    for sym, t in tickers.items():
+        if not sym.endswith("USDT"):
+            continue
+        if trading and sym not in trading:
+            continue
+        try:
+            day_pct = float(t.get("priceChangePercent") or 0) / 100.0
+            last = float(t.get("lastPrice") or 0)
+        except Exception:
+            continue
+        if last <= 0 or day_pct > -DISCOVER_DAY_DROP:
+            continue
+
+        klines = await fetch_klines(
+            client, sym, interval=DISCOVER_KLINE_INTERVAL, limit=kline_limit
+        )
+        if not klines:
+            continue
+        week_drop, high_close, high_t = calc_drop_from_high_close(klines, last)
+        logger.info(
+            f"discover候选 {sym} 24h={fmt_pct(day_pct)} "
+            f"week_drop={fmt_pct(week_drop)} high_close={fmt_price(high_close)}@{high_t}"
+        )
+        if week_drop < DISCOVER_WEEK_DROP:
+            continue
+        candidates.append(
+            {
+                "symbol": sym,
+                "last": last,
+                "day_pct": day_pct,
+                "week_drop": week_drop,
+                "high_close": high_close,
+                "high_close_time": high_t,
+            }
+        )
+        await asyncio.sleep(0.05)
+
+    return candidates
+
+
+async def run_auto_discover(force: bool = False) -> None:
+    global _last_discover_ts
+    if not DISCOVER_ENABLED:
+        return
+    now_ts = time.time()
+    if not force and now_ts - _last_discover_ts < DISCOVER_INTERVAL:
+        return
+    _last_discover_ts = now_ts
+
+    logger.info(
+        f"开始自动发现: 24h跌>={fmt_pct(DISCOVER_DAY_DROP)} 且 "
+        f"{DISCOVER_LOOKBACK_DAYS}日4h相对最高收盘跌>={fmt_pct(DISCOVER_WEEK_DROP)}"
+    )
+    async with httpx.AsyncClient(timeout=30) as client:
+        hits = await discover_dump_symbols(client)
+
+    if not hits:
+        logger.info("自动发现: 本轮无命中")
+        return
+
+    for hit in hits:
+        sym = hit["symbol"]
+        item, created = upsert_symbol(sym)
+        if not created:
+            logger.info(f"自动发现命中但已在监控: {sym}")
+            continue
+        start_at = parse_dt(item["start_at"])
+        expire_at = parse_dt(item["expire_at"])
+        remain_h = max((expire_at - datetime.now()).total_seconds(), 0) / 3600
+        msg = (
+            f"🔎 自动发现并加入 {sym}\n"
+            f"24h涨跌: {fmt_pct(hit['day_pct'])}\n"
+            f"近{DISCOVER_LOOKBACK_DAYS}日相对最高收盘跌: {fmt_pct(hit['week_drop'])}\n"
+            f"最高收盘: {fmt_price(hit['high_close'])} @ {hit['high_close_time']}\n"
+            f"当前价: {fmt_price(hit['last'])}\n"
+            f"开始: {start_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"过期: {expire_at.strftime('%Y-%m-%d %H:%M:%S')}（剩余约 {remain_h:.1f}h）\n"
+            f"规则: {KLINE_LIMIT}x{INTERVAL} 先低后高 ≥ {fmt_pct(PUMP_THRESHOLD)}\n"
+            f"https://www.binance.com/zh-CN/futures/{sym}"
+        )
+        logger.info(msg.replace("\n", " | "))
+        reply_feishu_chat(msg)
 
 
 def calc_rise(klines: list) -> tuple[float, float, float, float]:
@@ -427,8 +582,8 @@ async def check_symbol(client: httpx.AsyncClient, symbol: str, now: datetime) ->
                     save_state()
         return False
 
-    klines = await fetch_klines(client, symbol)
-    if klines:
+    klines = await fetch_klines(client, symbol, interval=INTERVAL, limit=KLINE_LIMIT)
+    if klines and len(klines) >= KLINE_LIMIT:
         rise, old_low, new_high, close = calc_rise(klines)
         remain_h = max((expire_at - now).total_seconds(), 0) / 3600
         logger.info(
@@ -445,11 +600,22 @@ async def monitor_loop() -> None:
     mins = window_minutes()
     logger.info(
         f"===== 监控循环启动 ===== {KLINE_LIMIT}x{INTERVAL}(~{mins}m) | "
-        f"阈值={fmt_pct(PUMP_THRESHOLD)} | 轮询={CHECK_INTERVAL}s | 每币有效={VALID_HOURS}h"
+        f"阈值={fmt_pct(PUMP_THRESHOLD)} | 轮询={CHECK_INTERVAL}s | 每币有效={VALID_HOURS}h | "
+        f"自动发现={'ON' if DISCOVER_ENABLED else 'OFF'} every {DISCOVER_INTERVAL}s"
     )
+    # 启动先跑一轮发现
+    try:
+        await run_auto_discover(force=True)
+    except Exception as e:
+        logger.opt(exception=True).warning(f"启动自动发现失败: {e}")
+
     while True:
         now = datetime.now()
-        symbols = active_symbols(now)
+        try:
+            await run_auto_discover(force=False)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"自动发现失败: {e}")
+
         # 种子列表：仅当 state 里还没有时纳入
         for s in SYMBOLS:
             sym = normalize_symbol(s)
@@ -462,7 +628,7 @@ async def monitor_loop() -> None:
                 for symbol in symbols:
                     await check_symbol(client, symbol, now)
         else:
-            logger.info("当前无活跃监控币，等待飞书群加币…")
+            logger.info("当前无活跃监控币，等待飞书加币/自动发现…")
 
         await asyncio.sleep(CHECK_INTERVAL)
 

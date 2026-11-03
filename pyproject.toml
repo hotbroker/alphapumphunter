@@ -9,6 +9,7 @@ dependencies = [
     "curl-cffi>=0.14.0",
     "fastapi>=0.135.2",
     "httpx[socks]>=0.25",
+    "lark-oapi>=1.7.5",
     "loguru>=0.7",
     "pybit>=5.10",
     "uptime-kuma-api>=1.2.1",

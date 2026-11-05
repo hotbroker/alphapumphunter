@@ -539,6 +539,31 @@ async def get_symbol_future_price(symbol):
             continue
     return None
 
+BINANCE_FAPI_TICKER_PRICE = "https://www.binance.com/fapi/v1/ticker/price"
+
+async def fetch_all_future_prices() -> Dict[str, dict]:
+    """一次拉取全部合约最新价，key 为合约 symbol（如 BTCUSDT）。"""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Connection': 'keep-alive',
+    }
+    trycnt = 3
+    while trycnt > 0:
+        trycnt -= 1
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                r = await client.get(BINANCE_FAPI_TICKER_PRICE, headers=headers)
+                r.raise_for_status()
+            data = r.json()
+            if not isinstance(data, list):
+                raise ValueError("Unexpected response format from Binance ticker price")
+            return {item["symbol"]: item for item in data if item.get("symbol")}
+        except Exception as e:
+            logger.opt(exception=True).warning(f"trycnt {trycnt} Failed to fetch_all_future_prices: {e}")
+            continue
+    return {}
+
 BINANCE_FAPI_TICKER_24H = "https://www.binance.com/fapi/v1/ticker/24hr"
 
 async def fetch_binance_futures_24h() -> List[Dict[str, Any]]:
@@ -703,7 +728,7 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
 
                 snap_by_id: Dict[str, dict] = {mw_token_key(it): it for it in snapshot}
 
-
+                future_prices = await fetch_all_future_prices()
 
                 for idx,token_id in enumerate(list(tracked_ids)):
 
@@ -734,7 +759,15 @@ async def cmd_run_async(interval: int, window_min: int, threshold_pct: float, re
                         if contractAddress.upper() in bypass:
                             print(f"Token {contractAddress} in bypass list, skip alert")
                             continue
-                    futureprice = await get_symbol_future_price(sym)
+                    quote = future_prices.get(f"{sym.upper()}USDT")
+                    futureprice = None
+                    if quote:
+                        timediff = time.time() - float(quote.get("time", 0)) / 1000
+                        if timediff > 100:
+                            print(f"get_symbol_future_price {sym} timediff {timediff}")
+                            continue
+                        else:
+                            futureprice = quote.get("price")
                     if futureprice:
                         futureprice = float(futureprice)
                         dif = futureprice-px

@@ -83,9 +83,7 @@ class ContractTypeUpdaterTests(unittest.IsolatedAsyncioTestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "contract_types.json"
-            with mock.patch(
-                "update_binance_contract_types.httpx.AsyncClient", return_value=client_context
-            ):
+            with mock.patch("httpx.AsyncClient", return_value=client_context):
                 self.assertEqual(await update_contract_types(cache_path), 1)
 
             client.get.assert_awaited_once_with(EXCHANGE_INFO_URL)

@@ -31,7 +31,7 @@ trap stop_sources EXIT
 cd "$project_dir"
 start_source kol_main.py run
 start_source kol_toppump.py run
-start_source kol_binance_pullback_consolidation_monitor.py run
+#start_source kol_binance_pullback_consolidation_monitor.py run
 start_source kol_binance_monitor_volume_drops.py
 start_source kol_instant_opportunity_hunter.py --mode monitor
 

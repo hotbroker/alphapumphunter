@@ -6,6 +6,7 @@
 - 自动发现：24h 跌 ≥30%，且近 7 日 4h 相对最高收盘跌 ≥70% → 自动加入监控
 - 加币回执 / 拉盘告警 / 到期通知 一律发到飞书指令群（应用机器人），不再走 webhook
 - 每个 symbol 首次纳入起 VALID_HOURS 小时有效，到期写入本地状态，重启不重置
+- 跑满 RESTART_AFTER_SECONDS 后监控进程主动退出，由本脚本的监督进程重新拉起，释放内存
 """
 from __future__ import annotations
 
@@ -13,10 +14,12 @@ import asyncio
 import json
 import os
 import re
+import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, NoReturn
 
 import httpx
 import lark_oapi as lark
@@ -33,6 +36,8 @@ PUMP_THRESHOLD = 0.15
 CHECK_INTERVAL = 30
 VALID_HOURS = 20
 ALERT_COOLDOWN = 10 * 3600        # 同一 symbol 报警冷却 10 小时
+RESTART_AFTER_SECONDS = 60 * 60     # 监控进程跑满后退出，监督进程再拉起
+RESTART_EXIT_CODE = 86              # 计划内重启，监督进程看到后立即拉起
 
 # 自动发现暴跌币
 DISCOVER_ENABLED = True
@@ -67,8 +72,12 @@ _feishu_app_secret = ""
 _token_cache: dict[str, Any] = {"token": "", "expire_at": 0.0}
 _symbol_cache: dict[str, Any] = {"symbols": set(), "expire_at": 0.0}
 _last_discover_ts = 0.0
+_PROCESS_STARTED_AT = time.time()
+_IS_WORKER = os.environ.get("TEMP_PUMP_WORKER") == "1"
+# Ctrl+C / 关闭控制台。监督进程看到这些退出码就停止，不再拉起
+_INTERRUPT_EXIT_CODES = {130, 3221225786, -1073741510}
 
-if __name__ == "__main__":
+if __name__ == "__main__" and _IS_WORKER:
     logger.add(
         "log{}.log".format(os.path.basename(os.path.abspath(__file__))),
         rotation="1 MB",
@@ -596,12 +605,92 @@ async def check_symbol(client: httpx.AsyncClient, symbol: str, now: datetime) ->
     return True
 
 
+def _exit_for_restart() -> NoReturn:
+    """一轮轮询边界上保存状态后退出。用 os._exit 杀掉飞书长连接拉起的非 daemon 线程。"""
+    lived = time.time() - _PROCESS_STARTED_AT
+    logger.info(
+        f"已连续运行 {lived:.0f}s，达到 {RESTART_AFTER_SECONDS}s，"
+        f"保存状态后退出，由监督进程重新拉起"
+    )
+    if state_lock.acquire(timeout=30):
+        try:
+            save_state()
+        finally:
+            state_lock.release()
+    else:
+        logger.warning("等待状态锁超时，按最近一次已保存的状态退出")
+    try:
+        logger.complete()
+    except Exception:
+        pass
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(RESTART_EXIT_CODE)
+
+
+def _terminate_process(proc: subprocess.Popen) -> None:
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=10)
+
+
+def _supervise() -> None:
+    """前台监督进程：等监控进程退出后再拉起下一个，避免两个进程同时连飞书、写状态。"""
+    script = os.path.abspath(__file__)
+    env = os.environ.copy()
+    env["TEMP_PUMP_WORKER"] = "1"
+    cmd = [sys.executable, script, *sys.argv[1:]]
+    popen_kwargs: dict[str, Any] = {"env": env, "cwd": os.getcwd()}
+    if os.name == "nt":
+        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        popen_kwargs["start_new_session"] = True
+
+    logger.info(
+        f"监督进程启动 pid={os.getpid()}，监控进程每 {RESTART_AFTER_SECONDS}s 重启一次"
+    )
+    while True:
+        started = time.time()
+        try:
+            proc = subprocess.Popen(cmd, **popen_kwargs)
+        except Exception as e:
+            logger.opt(exception=True).warning(f"拉起监控进程失败: {e}")
+            time.sleep(10)
+            continue
+        logger.info(f"监控进程已启动 pid={proc.pid}")
+        try:
+            code = proc.wait()
+        except KeyboardInterrupt:
+            logger.info("收到中断，结束监控进程并停止重启")
+            _terminate_process(proc)
+            raise
+        lived = time.time() - started
+        logger.info(f"监控进程退出 pid={proc.pid} code={code} 运行 {lived:.0f}s")
+        if code in _INTERRUPT_EXIT_CODES:
+            logger.info("监控进程因中断退出，停止重启")
+            return
+        if code != RESTART_EXIT_CODE:
+            delay = 10 if lived < 30 else 2
+            logger.info(f"非计划退出，{delay}s 后重新拉起")
+            try:
+                time.sleep(delay)
+            except KeyboardInterrupt:
+                logger.info("收到中断，停止重启")
+                raise
+
+
 async def monitor_loop() -> None:
     mins = window_minutes()
     logger.info(
         f"===== 监控循环启动 ===== {KLINE_LIMIT}x{INTERVAL}(~{mins}m) | "
         f"阈值={fmt_pct(PUMP_THRESHOLD)} | 轮询={CHECK_INTERVAL}s | 每币有效={VALID_HOURS}h | "
-        f"自动发现={'ON' if DISCOVER_ENABLED else 'OFF'} every {DISCOVER_INTERVAL}s"
+        f"自动发现={'ON' if DISCOVER_ENABLED else 'OFF'} every {DISCOVER_INTERVAL}s | "
+        f"进程重启={RESTART_AFTER_SECONDS}s"
     )
     # 启动先跑一轮发现
     try:
@@ -610,6 +699,9 @@ async def monitor_loop() -> None:
         logger.opt(exception=True).warning(f"启动自动发现失败: {e}")
 
     while True:
+        if time.time() - _PROCESS_STARTED_AT >= RESTART_AFTER_SECONDS:
+            _exit_for_restart()
+
         now = datetime.now()
         try:
             await run_auto_discover(force=False)
@@ -658,4 +750,15 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    if _IS_WORKER:
+        try:
+            asyncio.run(main())
+        except KeyboardInterrupt:
+            logger.info("监控进程收到中断，退出")
+            os._exit(130)
+        os._exit(0)
+    else:
+        try:
+            _supervise()
+        except KeyboardInterrupt:
+            raise SystemExit(130)

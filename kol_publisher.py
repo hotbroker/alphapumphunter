@@ -455,6 +455,72 @@ def _chat_url(base_url: str) -> str:
     return base_url + "/chat/completions" if base_url.rstrip("/").endswith("/v1") else base_url + "/v1/chat/completions"
 
 
+def _content_piece(value: Any) -> str:
+    """Join streamed content without stripping partial chunks."""
+
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and item.get("type") in (None, "text", "output_text"):
+                parts.append(
+                    str(item.get("text") or item.get("content") or item.get("output_text") or "")
+                )
+        return "".join(parts)
+    return ""
+
+
+def _stream_event_text(line: str) -> str:
+    """Read one SSE line. Reasoning fields are ignored; only assistant content is kept."""
+
+    raw = line.strip()
+    if not raw.startswith("data:"):
+        return ""
+    data = raw[5:].strip()
+    if not data or data == "[DONE]":
+        return ""
+    try:
+        payload = json.loads(data)
+    except json.JSONDecodeError:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    _raise_chat_completion_error(payload)
+    pieces: list[str] = []
+    for root in _chat_completion_roots(payload):
+        choices = root.get("choices")
+        if not isinstance(choices, list):
+            continue
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            delta = choice.get("delta")
+            if isinstance(delta, dict) and "content" in delta:
+                pieces.append(_content_piece(delta.get("content")))
+                continue
+            message = choice.get("message")
+            if isinstance(message, dict) and "content" in message:
+                pieces.append(_content_piece(message.get("content")))
+    return "".join(pieces)
+
+
+async def _read_chat_completion(response: httpx.Response) -> str:
+    content_type = response.headers.get("content-type", "")
+    if "text/event-stream" not in content_type.lower():
+        payload = json.loads((await response.aread()).decode("utf-8"))
+        return extract_assistant_text_from_chat_response(payload)
+    parts: list[str] = []
+    async for line in response.aiter_lines():
+        parts.append(_stream_event_text(line))
+    text = "".join(parts).strip()
+    if not text:
+        raise KeyError("content")
+    return text
+
+
 def okx_orbit_post_url(post_id: str) -> str:
     return f"{OKX_ORBIT_POST_URL_PREFIX}{str(post_id).strip()}"
 
@@ -692,23 +758,36 @@ class AIWriter:
             "model": self.config.model,
             "messages": messages,
             "temperature": self.config.temperature,
+            "stream": True,
         }
         headers = {"Authorization": f"Bearer {self.config.api_key}"}
         last_error: Optional[Exception] = None
         for attempt in range(3):
             try:
                 async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
-                    response = await client.post(
+                    async with client.stream(
+                        "POST",
                         _chat_url(self.config.base_url),
                         headers=headers,
                         json=request_payload,
-                    )
-                    response.raise_for_status()
-                    response_body = response.json()
-                if not isinstance(response_body, dict):
-                    raise KeyError("payload")
-                _raise_chat_completion_error(response_body)
-                text = extract_assistant_text_from_chat_response(response_body)
+                    ) as response:
+                        if response.status_code >= 400:
+                            error_body = (await response.aread()).decode("utf-8", errors="replace")
+                            logger.warning(
+                                "AI HTTP {} on attempt {} model={}: {}",
+                                response.status_code,
+                                attempt + 1,
+                                self.config.model,
+                                error_body[:500],
+                            )
+                            response.raise_for_status()
+                        text = await _read_chat_completion(response)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code < 500:
+                    raise
+                last_error = RuntimeError(f"AI HTTP {exc.response.status_code}")
+                last_error.__cause__ = exc
+                continue
             except RuntimeError as exc:
                 if not str(exc).startswith("AI "):
                     raise
@@ -729,7 +808,7 @@ class AIWriter:
                     "AI returned malformed payload on attempt {} model={}: {}",
                     attempt + 1,
                     self.config.model,
-                    response_body if "response_body" in locals() else None,
+                    exc,
                 )
                 continue
             return clean_generated_text(

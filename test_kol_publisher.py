@@ -368,6 +368,55 @@ class KOLCopyTests(unittest.TestCase):
             )
 
 
+class AIWriterStreamTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stream_keeps_content_and_drops_reasoning_array(self):
+        lines = [
+            'data: {"choices":[{"delta":{"reasoning_content":"think"}}]}',
+            'data: {"choices":[{"delta":{"reasoning":[{"type":"thinking","text":"SECRET THINKING"}]}}]}',
+            'data: {"choices":[{"delta":{"content":"$ACE 看多，量能"}}]}',
+            'data: {"choices":[{"delta":{"content":"起来了"}}]}',
+            "data: [DONE]",
+        ]
+        response = mock.Mock()
+        response.status_code = 200
+        response.headers = {"content-type": "text/event-stream"}
+        response.raise_for_status = mock.Mock()
+
+        async def aiter_lines():
+            for line in lines:
+                yield line
+
+        response.aiter_lines = aiter_lines
+        stream_context = mock.MagicMock()
+        stream_context.__aenter__ = mock.AsyncMock(return_value=response)
+        stream_context.__aexit__ = mock.AsyncMock(return_value=False)
+        client = mock.Mock()
+        client.stream = mock.Mock(return_value=stream_context)
+        client_context = mock.MagicMock()
+        client_context.__aenter__ = mock.AsyncMock(return_value=client)
+        client_context.__aexit__ = mock.AsyncMock(return_value=False)
+        writer = AIWriter(
+            AIConfig("https://example.com/v1", "key", "deepseek-v4.1-flash", max_chars=300),
+            ToneConfig(),
+            300,
+        )
+        signal = {
+            "symbol": "ACE",
+            "source": "test",
+            "indicator": "alpha_surge",
+            "direction": "LONG",
+            "summary": "测试",
+            "price": 1,
+            "details_json": "{}",
+            "kline_context": [],
+        }
+        with mock.patch("kol_publisher.httpx.AsyncClient", return_value=client_context):
+            text = await writer.generate(signal)
+        self.assertIn("$ACE 看多，量能起来了", text)
+        self.assertNotIn("SECRET", text)
+        self.assertTrue(client.stream.call_args.kwargs["json"]["stream"])
+
+
 class KOLMarketContextTests(unittest.IsolatedAsyncioTestCase):
     async def test_fetches_eight_klines_once_per_signal(self):
         row = [
